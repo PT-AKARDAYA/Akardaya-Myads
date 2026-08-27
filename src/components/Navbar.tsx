@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AkarDayaLogo } from './AkarDayaLogo';
+import { trackRealVisitor } from '../utils/analyticsTracker';
 import {
   Moon,
   Sun,
@@ -21,12 +22,25 @@ export const Navbar: React.FC = () => {
   const { data, darkMode, toggleDarkMode, openOrderModalForPackage } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const sectionNameMap: { [id: string]: string } = {
+    'section-hero': '/ (Beranda)',
+    'section-packages': '/paket-langganan',
+    'section-matrix': '/tabel-matriks',
+    'section-rates': '/tarif-saluran',
+    'section-inventory-products': '/inventori-myads',
+    'section-calculator': '/kalkulator-biaya',
+    'section-office-maps': '/lokasi-kantor',
+    'section-testimonials': '/testimoni-ulasan',
+  };
+
   const scrollToSection = (id: string) => {
     setMobileMenuOpen(false);
     const element = document.getElementById(id);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
+    const pageName = sectionNameMap[id] || `/${id.replace('section-', '')}`;
+    trackRealVisitor(pageName, 'pageview', data?.companyConfig?.spreadsheetUrl);
   };
 
   const directWhatsAppLink = `https://wa.me/${data.companyConfig.waNumber}?text=${encodeURIComponent(

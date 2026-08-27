@@ -30,9 +30,64 @@ const MainLayout: React.FC = () => {
   const { data } = useApp();
 
   useEffect(() => {
-    // Automatically track visitor when the app loads, passing the global spreadsheet URL
+    // Automatically track visitor sections as they explore
     const targetUrl = data?.companyConfig?.spreadsheetUrl;
-    trackRealVisitor(window.location.pathname || '/', 'pageview', targetUrl);
+    
+    // Initial page load
+    trackRealVisitor('/ (Beranda)', 'pageview', targetUrl);
+
+    // Section mapping to human-friendly page names in database
+    const sectionMap: { [elementId: string]: string } = {
+      'section-hero': '/ (Beranda)',
+      'section-packages': '/paket-langganan',
+      'section-matrix': '/tabel-matriks',
+      'section-rates': '/tarif-saluran',
+      'section-inventory-products': '/inventori-myads',
+      'section-calculator': '/kalkulator-biaya',
+      'section-office-maps': '/lokasi-kantor',
+      'section-testimonials': '/testimoni-ulasan',
+    };
+
+    let dwellTimer: any = null;
+    let currentObservedSection = '/ (Beranda)';
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.3) {
+            const pageName = sectionMap[entry.target.id];
+            if (pageName && pageName !== currentObservedSection) {
+              if (dwellTimer) clearTimeout(dwellTimer);
+              // Wait 1 second of dwell time on this section before recording
+              dwellTimer = setTimeout(() => {
+                currentObservedSection = pageName;
+                trackRealVisitor(pageName, 'pageview', targetUrl);
+              }, 1000);
+            }
+          }
+        });
+      },
+      {
+        threshold: [0.3],
+        rootMargin: '-10% 0px -20% 0px',
+      }
+    );
+
+    const observeAll = () => {
+      Object.keys(sectionMap).forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el);
+      });
+    };
+
+    observeAll();
+    const timeoutId = setTimeout(observeAll, 1500);
+
+    return () => {
+      if (dwellTimer) clearTimeout(dwellTimer);
+      clearTimeout(timeoutId);
+      observer.disconnect();
+    };
   }, [data?.companyConfig?.spreadsheetUrl]);
 
   return (

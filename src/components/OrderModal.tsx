@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { trackRealVisitor } from '../utils/analyticsTracker';
 import {
   X,
   PhoneCall,
@@ -35,6 +36,7 @@ export const OrderModal: React.FC = () => {
 
   useEffect(() => {
     if (isOrderModalOpen) {
+      trackRealVisitor('/formulir-pemesanan', 'pageview', companyConfig.spreadsheetUrl);
       if (selectedPackageForOrder) {
         setSelectedPackageId(selectedPackageForOrder.id);
         setEstimatedBudget(selectedPackageForOrder.priceDisplay);
@@ -43,7 +45,7 @@ export const OrderModal: React.FC = () => {
         setEstimatedBudget((prev) => prev || packages[0].priceDisplay);
       }
     }
-  }, [isOrderModalOpen, selectedPackageForOrder]);
+  }, [isOrderModalOpen, selectedPackageForOrder, companyConfig.spreadsheetUrl]);
 
   if (!isOrderModalOpen) return null;
 

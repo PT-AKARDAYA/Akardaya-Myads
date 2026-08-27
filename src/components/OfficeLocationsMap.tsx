@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { OfficeLocation } from '../types';
+import { trackRealVisitor } from '../utils/analyticsTracker';
 import {
   MapPin,
   Building2,
@@ -13,6 +14,8 @@ import {
   Check,
   Copy,
   Layers,
+  ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 
 export const OfficeLocationsMap: React.FC = () => {
@@ -26,10 +29,6 @@ export const OfficeLocationsMap: React.FC = () => {
   const [filterType, setFilterType] = useState<'ALL' | 'PUSAT' | 'CABANG'>('ALL');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Selected office data
-  const selectedOffice =
-    offices.find((o) => o.id === selectedOfficeId) || offices[0] || null;
-
   // Filtered offices
   const filteredOffices = offices.filter((office) => {
     if (filterType === 'PUSAT') return office.type === 'PUSAT';
@@ -37,16 +36,26 @@ export const OfficeLocationsMap: React.FC = () => {
     return true;
   });
 
+  // Selected office data (fallback to first filtered if current selected is not in filtered)
+  const selectedOffice =
+    filteredOffices.find((o) => o.id === selectedOfficeId) ||
+    filteredOffices[0] ||
+    offices.find((o) => o.id === selectedOfficeId) ||
+    offices[0] ||
+    null;
+
+  const handleSelectOffice = (officeId: string) => {
+    setSelectedOfficeId(officeId);
+    const targetOffice = offices.find((o) => o.id === officeId);
+    if (targetOffice) {
+      trackRealVisitor(`/lokasi-kantor/${targetOffice.cityName?.toLowerCase() || targetOffice.id}`, 'pageview', companyConfig.spreadsheetUrl);
+    }
+  };
+
   const handleCopyCoordinates = (office: OfficeLocation) => {
     const text = `${office.latitude}, ${office.longitude}`;
     navigator.clipboard?.writeText(text);
     setCopiedId(office.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const handleCopyAddress = (address: string, id: string) => {
-    navigator.clipboard?.writeText(address);
-    setCopiedId(`addr-${id}`);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -61,7 +70,7 @@ export const OfficeLocationsMap: React.FC = () => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
+        <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-xs font-bold uppercase tracking-wider mb-4 border border-blue-200 dark:border-blue-800/80 shadow-xs">
             <MapPin className="w-3.5 h-3.5" />
             <span>Jaringan Kantor & Konsultasi Langsung</span>
@@ -76,7 +85,7 @@ export const OfficeLocationsMap: React.FC = () => {
           </p>
 
           {/* Filter Buttons */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={() => setFilterType('ALL')}
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-xs ${
@@ -110,8 +119,182 @@ export const OfficeLocationsMap: React.FC = () => {
           </div>
         </div>
 
-        {/* Main Grid: Office List (Left) & Live Map (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* ========================================================================= */}
+        {/* MOBILE VIEW (lg:hidden): Compact Dropdown & Horizontal Tabs Above Map */}
+        {/* ========================================================================= */}
+        <div className="block lg:hidden space-y-4">
+          {/* Mobile Office Selector Control */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <label htmlFor="mobile-office-select" className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Pilih Kantor yang Ditampilkan di Peta:</span>
+              </label>
+              <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
+                {filteredOffices.length} Pilihan
+              </span>
+            </div>
+
+            {/* Dropdown Selector */}
+            <div className="relative">
+              <select
+                id="mobile-office-select"
+                value={selectedOffice?.id || ''}
+                onChange={(e) => handleSelectOffice(e.target.value)}
+                className="w-full pl-3.5 pr-10 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 border-2 border-blue-500 text-slate-900 dark:text-white font-bold text-sm shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none transition-all cursor-pointer"
+              >
+                {filteredOffices.map((office) => (
+                  <option key={office.id} value={office.id}>
+                    {office.type === 'PUSAT' ? '⭐ [PUSAT]' : '📍 [CABANG]'} {office.name} {office.cityName ? `(${office.cityName})` : ''}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-blue-600 dark:text-blue-400">
+                <ChevronDown className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Horizontal Quick Pill Chips for 1-tap switching */}
+            <div className="pt-1">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1.5 font-medium flex items-center gap-1">
+                <span>Atau tap cepat kota:</span>
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {filteredOffices.map((office) => {
+                  const isSel = selectedOffice?.id === office.id;
+                  return (
+                    <button
+                      key={`mob-pill-${office.id}`}
+                      onClick={() => handleSelectOffice(office.id)}
+                      className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                        isSel
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                      }`}
+                    >
+                      <MapPin className={`w-3 h-3 ${isSel ? 'text-white' : 'text-blue-500'}`} />
+                      <span>{office.cityName || office.name.replace('Kantor Cabang ', '').replace('Kantor Pusat - ', '')}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Map Display for Selected Office */}
+          {selectedOffice && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-md">
+              {/* Office Details Banner */}
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/90">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      selectedOffice.type === 'PUSAT'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                        : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                    }`}
+                  >
+                    {selectedOffice.type === 'PUSAT' ? 'Kantor Pusat' : 'Kantor Cabang'}
+                  </span>
+                  {selectedOffice.cityName && (
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      • {selectedOffice.cityName}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug mb-1">
+                  {selectedOffice.name}
+                </h3>
+
+                <p className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-1.5 mt-1.5 leading-relaxed">
+                  <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                  <span>{selectedOffice.address}</span>
+                </p>
+
+                {/* Operating hours & coordinates */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-500 dark:text-slate-400 pt-2.5 mt-2.5 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span>{selectedOffice.operatingHours || companyConfig.operatingHours}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span>Lat: {selectedOffice.latitude.toFixed(4)}, Lng: {selectedOffice.longitude.toFixed(4)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Map Iframe */}
+              <div className="relative w-full h-[280px] bg-slate-100 dark:bg-slate-900">
+                <iframe
+                  title={`Peta Lokasi ${selectedOffice.name}`}
+                  src={`https://www.google.com/maps?q=${selectedOffice.latitude},${selectedOffice.longitude}&hl=id&z=16&output=embed`}
+                  className="w-full h-full border-0"
+                  loading="lazy"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                ></iframe>
+
+                <div className="absolute top-2.5 left-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 pointer-events-none">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                  <span>{selectedOffice.name}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons in Mobile View */}
+              <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-2">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${selectedOffice.latitude},${selectedOffice.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-sm text-center"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Petunjuk Arah</span>
+                </a>
+
+                <a
+                  href={`https://wa.me/${selectedOffice.whatsapp || companyConfig.waNumber}?text=${encodeURIComponent(
+                    `Halo Admin, saya ingin konsultasi kampanye iklan dan berkunjung ke ${selectedOffice.name}.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-sm text-center"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyCoordinates(selectedOffice)}
+                  className="col-span-2 py-2 px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {copiedId === selectedOffice.id ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Koordinat Tersalin</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Salin Titik Koordinat ({selectedOffice.latitude}, {selectedOffice.longitude})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ========================================================================= */}
+        {/* DESKTOP VIEW (hidden lg:grid): Dual Column Office List (Left) & Map (Right) */}
+        {/* ========================================================================= */}
+        <div className="hidden lg:grid lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Office Cards List (5 Cols on LG) */}
           <div className="lg:col-span-5 space-y-3.5 max-h-[640px] overflow-y-auto pr-1">
             {filteredOffices.map((office) => {
@@ -120,7 +303,7 @@ export const OfficeLocationsMap: React.FC = () => {
                 <div
                   key={office.id}
                   id={`office-card-${office.id}`}
-                  onClick={() => setSelectedOfficeId(office.id)}
+                  onClick={() => handleSelectOffice(office.id)}
                   className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer text-left relative ${
                     isSelected
                       ? 'bg-white dark:bg-slate-800 border-blue-500 ring-2 ring-blue-500/20 dark:ring-blue-400/20 shadow-md'

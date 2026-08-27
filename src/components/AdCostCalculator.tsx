@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { trackRealVisitor } from '../utils/analyticsTracker';
 import {
   Calculator,
   Percent,
@@ -53,6 +54,7 @@ export const AdCostCalculator: React.FC = () => {
 
   // Share calculation to WhatsApp
   const shareToWhatsApp = () => {
+    trackRealVisitor('/kalkulator-biaya/konsultasi-simulasi-wa', 'simulasi', companyConfig.spreadsheetUrl);
     const text = `Halo ${companyConfig.brandName}, saya melakukan simulasi iklan di website:\n\n` +
       `📌 *Saluran:* ${currentRate.facility} - ${currentRate.featureName} (${currentRate.rateDisplay})\n` +
       `👥 *Estimasi Jangkauan:* ${estimatedReach.toLocaleString('id-ID')} penerima\n` +

@@ -144,16 +144,25 @@ export function trackRealVisitor(
   try {
     const visitorId = getOrCreateVisitorId();
 
-    // Rate limit per session to avoid recording infinite duplicate clicks on same page
+    // Format clean page name
+    let cleanPage = page.trim();
+    if (!cleanPage || cleanPage === '/' || cleanPage.toLowerCase() === '/akardaya-myads/' || cleanPage.toLowerCase() === '/akardaya-myads') {
+      cleanPage = '/ (Beranda)';
+    }
+
+    // Rate limit: If visiting a DIFFERENT page/section, allow immediately!
+    // If it's the exact same page, throttle to 3 seconds
     const lastTrackKey = 'akardaya_last_track_time';
+    const lastPageKey = 'akardaya_last_track_page';
     const lastTrack = localStorage.getItem(lastTrackKey);
+    const lastPage = localStorage.getItem(lastPageKey);
     const now = Date.now();
     
-    // Allow order_submit to bypass the 3s rate limit to ensure it's tracked
-    if (lastTrack && now - parseInt(lastTrack, 10) < 3000) {
+    if (lastPage === cleanPage && lastTrack && now - parseInt(lastTrack, 10) < 3000) {
       if (eventType === 'pageview') return;
     }
     localStorage.setItem(lastTrackKey, now.toString());
+    localStorage.setItem(lastPageKey, cleanPage);
 
     const ua = navigator.userAgent || '';
     const device = getDeviceType(ua);
@@ -168,7 +177,7 @@ export function trackRealVisitor(
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       visitorId,
       timestamp: jakartaNow,
-      page,
+      page: cleanPage,
       device,
       browser,
       referrer,
@@ -191,8 +200,8 @@ export function trackRealVisitor(
         const existingRecord = logs[existingTodayIdx];
         const newHits = (existingRecord.hits || 1) + 1;
         const pageArr = (existingRecord.page || '').split(',').map((s) => s.trim()).filter(Boolean);
-        if (!pageArr.includes(page)) {
-          pageArr.push(page);
+        if (!pageArr.includes(cleanPage)) {
+          pageArr.push(cleanPage);
         }
         logs[existingTodayIdx] = {
           ...existingRecord,
@@ -221,7 +230,7 @@ export function trackRealVisitor(
     // Send to Google Analytics 4 if configured
     try {
       if (typeof (window as any).gtag === 'function') {
-        (window as any).gtag('event', eventType, { page_path: page });
+        (window as any).gtag('event', eventType, { page_path: cleanPage });
       }
     } catch {
       // ignore
@@ -244,7 +253,7 @@ export function trackRealVisitor(
           action: 'track_visitor',
           visitorId,
           timestamp: jakartaNow,
-          page,
+          page: cleanPage,
           device,
           browser,
           referrer,
@@ -252,21 +261,14 @@ export function trackRealVisitor(
           screen,
         });
 
-        // 1. Send via fetch POST
+        // Use single fetch with keepalive: true (clean, reliable, avoids duplicate rows)
         fetch(activeSpreadsheetUrl, {
           method: 'POST',
           mode: 'no-cors', // Standard Google Apps Script way
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: payload,
+          keepalive: true,
         }).catch(() => {});
-
-        // 2. Also try sendBeacon if available for robust background sync
-        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-          try {
-            const blob = new Blob([payload], { type: 'text/plain;charset=utf-8' });
-            navigator.sendBeacon(activeSpreadsheetUrl, blob);
-          } catch (e) {}
-        }
       }
     } catch {
       // ignore sheet webhook error

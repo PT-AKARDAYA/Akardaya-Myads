@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
+import { trackRealVisitor } from '../utils/analyticsTracker';
 import {
   Home,
   Layers,
@@ -80,6 +81,15 @@ export const MobileBottomNav: React.FC = () => {
 
   const handleTabClick = (item: NavItem) => {
     setActiveTab(item.id);
+
+    const navSectionMap: { [id: string]: string } = {
+      beranda: '/ (Beranda)',
+      paket: '/paket-langganan',
+      kalkulator: '/kalkulator-biaya',
+      testimoni: '/testimoni-ulasan',
+      chat: '/chat-konsultasi-wa',
+    };
+    trackRealVisitor(navSectionMap[item.id] || `/${item.id}`, 'pageview', data?.companyConfig?.spreadsheetUrl);
 
     if (item.isExternal) {
       const directWhatsAppLink = `https://wa.me/${data.companyConfig.waNumber}?text=${encodeURIComponent(

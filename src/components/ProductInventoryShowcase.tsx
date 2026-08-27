@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useApp } from '../context/AppContext';
+import { trackRealVisitor } from '../utils/analyticsTracker';
 import {
   MapPin,
   Target,
@@ -36,8 +38,22 @@ interface ChannelProduct {
 }
 
 export const ProductInventoryShowcase: React.FC = () => {
+  const { data } = useApp();
   const [activeInventoryTab, setActiveInventoryTab] = useState<'all' | 'LBA' | 'Targeted' | 'Broadcast'>('all');
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+
+  const handleTabChange = (tab: 'all' | 'LBA' | 'Targeted' | 'Broadcast') => {
+    setActiveInventoryTab(tab);
+    const targetPage = tab === 'all' ? '/inventori-myads' : `/inventori-myads/${tab.toLowerCase()}`;
+    trackRealVisitor(targetPage, 'pageview', data?.companyConfig?.spreadsheetUrl);
+  };
+
+  const handleSelectChannel = (channelId: string | null) => {
+    setSelectedChannelId(channelId);
+    if (channelId) {
+      trackRealVisitor(`/inventori-myads/preview-${channelId}`, 'pageview', data?.companyConfig?.spreadsheetUrl);
+    }
+  };
 
   // Channels Database matching Attachment 2
   const channelProducts: ChannelProduct[] = [
@@ -712,7 +728,7 @@ export const ProductInventoryShowcase: React.FC = () => {
             {/* Filter Tabs */}
             <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 self-start md:self-auto overflow-x-auto max-w-full">
               <button
-                onClick={() => setActiveInventoryTab('all')}
+                onClick={() => handleTabChange('all')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap ${
                   activeInventoryTab === 'all'
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -722,7 +738,7 @@ export const ProductInventoryShowcase: React.FC = () => {
                 Semua (12)
               </button>
               <button
-                onClick={() => setActiveInventoryTab('LBA')}
+                onClick={() => handleTabChange('LBA')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap ${
                   activeInventoryTab === 'LBA'
                     ? 'bg-red-600 text-white shadow-xs'
@@ -733,7 +749,7 @@ export const ProductInventoryShowcase: React.FC = () => {
                 <span>LBA</span>
               </button>
               <button
-                onClick={() => setActiveInventoryTab('Targeted')}
+                onClick={() => handleTabChange('Targeted')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap ${
                   activeInventoryTab === 'Targeted'
                     ? 'bg-rose-600 text-white shadow-xs'
@@ -744,7 +760,7 @@ export const ProductInventoryShowcase: React.FC = () => {
                 <span>Targeted</span>
               </button>
               <button
-                onClick={() => setActiveInventoryTab('Broadcast')}
+                onClick={() => handleTabChange('Broadcast')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap ${
                   activeInventoryTab === 'Broadcast'
                     ? 'bg-amber-600 text-white shadow-xs'
@@ -858,7 +874,7 @@ export const ProductInventoryShowcase: React.FC = () => {
                       Audiens: <strong className="text-slate-900 dark:text-white">{channel.audiensReach}</strong>
                     </span>
                     <button
-                      onClick={() => setSelectedChannelId(channel.id)}
+                      onClick={() => handleSelectChannel(channel.id)}
                       className="text-blue-600 dark:text-blue-400 font-bold hover:underline inline-flex items-center gap-0.5"
                     >
                       <span>Detail</span>
@@ -893,7 +909,7 @@ export const ProductInventoryShowcase: React.FC = () => {
                   </h3>
                 </div>
                 <button
-                  onClick={() => setSelectedChannelId(null)}
+                  onClick={() => handleSelectChannel(null)}
                   className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center font-bold"
                 >
                   ✕
