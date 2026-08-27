@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation } from '../types';
 import { VisitorAnalyticsDashboard } from './VisitorAnalyticsDashboard';
@@ -46,20 +46,28 @@ export const AdminDashboardModal: React.FC = () => {
   // Sync draft data when modal opens or server data updates
   React.useEffect(() => {
     if (isAdminOpen) {
-      setDraftData(JSON.parse(JSON.stringify(data)));
+      setDraftData((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+        return JSON.parse(JSON.stringify(data));
+      });
     }
   }, [isAdminOpen, data]);
 
   // Real-time polling when modal is on Leads tab
-  React.useEffect(() => {
+  const refreshDataRef = useRef(refreshData);
+  useEffect(() => {
+    refreshDataRef.current = refreshData;
+  }, [refreshData]);
+
+  useEffect(() => {
     if (isAdminOpen && activeTab === 'LEADS') {
-      refreshData(true);
+      refreshDataRef.current(true);
       const interval = setInterval(() => {
-        refreshData(true);
-      }, 4000);
+        refreshDataRef.current(true);
+      }, 5000);
       return () => clearInterval(interval);
     }
-  }, [isAdminOpen, activeTab, refreshData]);
+  }, [isAdminOpen, activeTab]);
 
   const handleManualRefreshLeads = async () => {
     setIsRefreshingLeads(true);

@@ -34,14 +34,16 @@ export const OrderModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (selectedPackageForOrder) {
-      setSelectedPackageId(selectedPackageForOrder.id);
-      setEstimatedBudget(selectedPackageForOrder.priceDisplay);
-    } else if (packages.length > 0) {
-      setSelectedPackageId(packages[0].id);
-      setEstimatedBudget(packages[0].priceDisplay);
+    if (isOrderModalOpen) {
+      if (selectedPackageForOrder) {
+        setSelectedPackageId(selectedPackageForOrder.id);
+        setEstimatedBudget(selectedPackageForOrder.priceDisplay);
+      } else if (packages.length > 0) {
+        setSelectedPackageId((prev) => prev || packages[0].id);
+        setEstimatedBudget((prev) => prev || packages[0].priceDisplay);
+      }
     }
-  }, [selectedPackageForOrder, packages]);
+  }, [isOrderModalOpen, selectedPackageForOrder]);
 
   if (!isOrderModalOpen) return null;
 

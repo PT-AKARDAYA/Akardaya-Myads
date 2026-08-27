@@ -25,7 +25,7 @@ export const safeNormalizeData = (incoming: any): AppData => {
   const safeCompanyConfig: CompanyConfig = {
     ...INITIAL_APP_DATA.companyConfig,
     ...(incoming.companyConfig && typeof incoming.companyConfig === 'object' ? incoming.companyConfig : {}),
-    spreadsheetUrl: PERMANENT_GAS_URL,
+    spreadsheetUrl: incoming.companyConfig?.spreadsheetUrl || PERMANENT_GAS_URL,
   };
 
   const safeOffices = Array.isArray(incoming.offices) && incoming.offices.length > 0
@@ -46,7 +46,7 @@ export const safeNormalizeData = (incoming: any): AppData => {
     testimonials: safeTestimonials,
     orders: safeOrders,
     offices: safeOffices,
-    lastUpdated: incoming.lastUpdated || new Date().toISOString(),
+    lastUpdated: incoming.lastUpdated || '2026-08-27T00:00:00.000Z',
   };
 };
 
@@ -130,6 +130,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Background Spreadsheet & Cross-Tab Sync Engine
+  const dataRef = useRef<AppData>(data);
+  dataRef.current = data;
+
   const lastSyncTimestampRef = useRef<string>('');
   const isSyncingRef = useRef<boolean>(false);
 
@@ -140,8 +143,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       // 1. Check Google Spreadsheet first if URL is configured
+      const currentData = dataRef.current;
       const savedStorageUrl = typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null;
-      const spreadsheetUrl = data.companyConfig?.spreadsheetUrl || savedStorageUrl || PERMANENT_GAS_URL;
+      const spreadsheetUrl = currentData?.companyConfig?.spreadsheetUrl || savedStorageUrl || PERMANENT_GAS_URL;
 
       if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
         try {
@@ -154,26 +158,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const sheetJson = await sheetRes.json();
             if (sheetJson && sheetJson.status === 'success' && sheetJson.data && sheetJson.data.packages) {
               const remoteData = safeNormalizeData(sheetJson.data);
-              const remoteTimestamp = remoteData.lastUpdated || sheetJson.timestamp || '';
-              
-              // Check if order list changed or total updated
-              const currentOrders = data.orders || [];
-              const remoteOrders = remoteData.orders || [];
-              const ordersCountChanged = currentOrders.length !== remoteOrders.length;
-              const firstOrderIdChanged = (currentOrders[0]?.id || '') !== (remoteOrders[0]?.id || '');
-              const timestampChanged = !lastSyncTimestampRef.current || (remoteTimestamp && remoteTimestamp !== lastSyncTimestampRef.current);
+              const currentStr = JSON.stringify(dataRef.current);
+              const remoteStr = JSON.stringify(remoteData);
 
-              if (ordersCountChanged || firstOrderIdChanged || timestampChanged) {
+              if (currentStr !== remoteStr) {
+                const currentOrders = dataRef.current?.orders || [];
+                const remoteOrders = remoteData.orders || [];
                 if (remoteOrders.length > currentOrders.length && !silent) {
                   showToast(`🛒 ${remoteOrders.length - currentOrders.length} Pesanan baru terdeteksi dari Google Sheet!`, 'success');
                 } else if (!silent) {
                   showToast('✨ Data terbaru dari Google Spreadsheet berhasil dimuat', 'info');
                 }
                 
-                lastSyncTimestampRef.current = remoteTimestamp;
+                lastSyncTimestampRef.current = remoteData.lastUpdated || '';
+                dataRef.current = remoteData;
                 setData(remoteData);
                 if (typeof window !== 'undefined') {
-                  localStorage.setItem('akardaya_app_data', JSON.stringify(remoteData));
+                  localStorage.setItem('akardaya_app_data', remoteStr);
                 }
               }
               setIsLoading(false);
@@ -193,15 +194,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const json = await res.json();
           if (json && json.packages) {
             const remoteData = safeNormalizeData(json);
-            const currentOrders = data.orders || [];
-            const remoteOrders = remoteData.orders || [];
-            const ordersChanged = currentOrders.length !== remoteOrders.length || (currentOrders[0]?.id || '') !== (remoteOrders[0]?.id || '');
+            const currentStr = JSON.stringify(dataRef.current);
+            const remoteStr = JSON.stringify(remoteData);
             
-            if (!lastSyncTimestampRef.current || remoteData.lastUpdated !== lastSyncTimestampRef.current || ordersChanged) {
+            if (currentStr !== remoteStr) {
               lastSyncTimestampRef.current = remoteData.lastUpdated || '';
+              dataRef.current = remoteData;
               setData(remoteData);
               if (typeof window !== 'undefined') {
-                localStorage.setItem('akardaya_app_data', JSON.stringify(remoteData));
+                localStorage.setItem('akardaya_app_data', remoteStr);
               }
             }
           }
@@ -213,21 +214,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsLoading(false);
       isSyncingRef.current = false;
     }
-  }, [data.companyConfig?.spreadsheetUrl, data.orders, showToast]);
+  }, [showToast]);
 
   // Fetch initial data via REST fallback and localStorage
   const fetchInitialData = useCallback(async () => {
     // 1. Try loading from localStorage first (for instant first paint)
-    let currentData = INITIAL_APP_DATA;
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('akardaya_app_data');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && parsed.packages) {
-            currentData = safeNormalizeData(parsed);
-            setData(currentData);
-            lastSyncTimestampRef.current = currentData.lastUpdated || '';
+            const currentData = safeNormalizeData(parsed);
+            if (JSON.stringify(dataRef.current) !== JSON.stringify(currentData)) {
+              dataRef.current = currentData;
+              setData(currentData);
+              lastSyncTimestampRef.current = currentData.lastUpdated || '';
+            }
           }
         }
       } catch (e) {
@@ -277,13 +280,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const msg: WebSocketMessage = JSON.parse(event.data);
           if (msg.type === 'INIT_DATA' || msg.type === 'SYNC_DATA') {
             const normalized = safeNormalizeData(msg.payload);
-            lastSyncTimestampRef.current = normalized.lastUpdated || '';
-            setData(normalized);
-            localStorage.setItem('akardaya_app_data', JSON.stringify(normalized));
-            setIsLoading(false);
-            if (msg.type === 'SYNC_DATA') {
-              showToast('✨ Data disinkronkan secara real-time dari server', 'info');
+            const currentStr = JSON.stringify(dataRef.current);
+            const nextStr = JSON.stringify(normalized);
+            if (currentStr !== nextStr) {
+              lastSyncTimestampRef.current = normalized.lastUpdated || '';
+              dataRef.current = normalized;
+              setData(normalized);
+              localStorage.setItem('akardaya_app_data', nextStr);
+              if (msg.type === 'SYNC_DATA') {
+                showToast('✨ Data disinkronkan secara real-time dari server', 'info');
+              }
             }
+            setIsLoading(false);
           } else if (msg.type === 'ACTIVE_USERS') {
             setActiveUsers(msg.payload?.count || 1);
           } else if (msg.type === 'NEW_REVIEW') {
@@ -295,6 +303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (currentOrders.some((o) => o.id === newOrder.id)) return prev;
               const nextOrders = [newOrder, ...currentOrders];
               const nextData = safeNormalizeData({ ...prev, orders: nextOrders, lastUpdated: new Date().toISOString() });
+              dataRef.current = nextData;
               localStorage.setItem('akardaya_app_data', JSON.stringify(nextData));
               return nextData;
             });
@@ -309,7 +318,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsConnected(true);
       };
 
-      ws.onerror = (err) => {
+      ws.onerror = () => {
         console.log('WebSocket server not available, switching to Standalone Mode.');
         setIsConnected(true);
       };
@@ -320,10 +329,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showToast]);
 
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const syncLatestDataRef = useRef(syncLatestData);
+  syncLatestDataRef.current = syncLatestData;
+
+  const fetchInitialDataRef = useRef(fetchInitialData);
+  fetchInitialDataRef.current = fetchInitialData;
+
+  const connectWebSocketRef = useRef(connectWebSocket);
+  connectWebSocketRef.current = connectWebSocket;
 
   useEffect(() => {
-    fetchInitialData();
-    connectWebSocket();
+    fetchInitialDataRef.current();
+    connectWebSocketRef.current();
 
     // 1. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
     try {
@@ -334,8 +351,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bc.onmessage = (event) => {
           if (event.data && event.data.type === 'DATA_UPDATED' && event.data.payload) {
             const updated = safeNormalizeData(event.data.payload);
-            lastSyncTimestampRef.current = updated.lastUpdated || '';
-            setData(updated);
+            if (JSON.stringify(dataRef.current) !== JSON.stringify(updated)) {
+              lastSyncTimestampRef.current = updated.lastUpdated || '';
+              dataRef.current = updated;
+              setData(updated);
+            }
           } else if (event.data && event.data.type === 'NEW_ORDER' && event.data.payload) {
             const newOrder: OrderLead = event.data.payload;
             setData((prev) => {
@@ -343,6 +363,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (currentOrders.some((o) => o.id === newOrder.id)) return prev;
               const nextOrders = [newOrder, ...currentOrders];
               const nextData = safeNormalizeData({ ...prev, orders: nextOrders, lastUpdated: new Date().toISOString() });
+              dataRef.current = nextData;
               localStorage.setItem('akardaya_app_data', JSON.stringify(nextData));
               return nextData;
             });
@@ -361,7 +382,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const parsed = JSON.parse(e.newValue);
           if (parsed && parsed.packages) {
             const updated = safeNormalizeData(parsed);
-            setData(updated);
+            if (JSON.stringify(dataRef.current) !== JSON.stringify(updated)) {
+              dataRef.current = updated;
+              setData(updated);
+            }
           }
         } catch (err) {
           console.warn(err);
@@ -372,22 +396,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 3. Auto sync when user returns / focuses the browser tab
     const handleFocus = () => {
-      syncLatestData(true);
+      syncLatestDataRef.current(true);
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        syncLatestData(true);
+        syncLatestDataRef.current(true);
       }
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 4. Background polling timer (Every 8 seconds) to fetch spreadsheet updates across all users
+    // 4. Background polling timer (Every 10 seconds) to fetch spreadsheet updates across all users
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        syncLatestData(true);
+        syncLatestDataRef.current(true);
       }
-    }, 8000);
+    }, 10000);
 
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -404,7 +428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(pollInterval);
     };
-  }, [fetchInitialData, connectWebSocket, syncLatestData, showToast]);
+  }, [showToast]);
 
   // Update AppData (Admin)
   const updateAppData = async (newData: Partial<AppData>): Promise<boolean> => {

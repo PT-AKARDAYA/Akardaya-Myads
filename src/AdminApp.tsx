@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from './context/AppContext';
 import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation } from './types';
 import { AkarDayaLogo } from './components/AkarDayaLogo';
@@ -73,19 +73,27 @@ export const AdminApp: React.FC = () => {
 
   // Sync draft when server data updates
   useEffect(() => {
-    setDraftData(JSON.parse(JSON.stringify(data)));
+    setDraftData((prev) => {
+      if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+      return JSON.parse(JSON.stringify(data));
+    });
   }, [data]);
 
-  // Faster background lead poller (every 4s) when activeTab is LEADS
+  // Faster background lead poller (every 5s) when activeTab is LEADS
+  const refreshDataRef = useRef(refreshData);
+  useEffect(() => {
+    refreshDataRef.current = refreshData;
+  }, [refreshData]);
+
   useEffect(() => {
     if (activeTab === 'LEADS') {
-      refreshData(true);
+      refreshDataRef.current(true);
       const interval = setInterval(() => {
-        refreshData(true);
-      }, 4000);
+        refreshDataRef.current(true);
+      }, 5000);
       return () => clearInterval(interval);
     }
-  }, [activeTab, refreshData]);
+  }, [activeTab]);
 
   const handleManualRefreshLeads = async () => {
     setIsRefreshingLeads(true);
