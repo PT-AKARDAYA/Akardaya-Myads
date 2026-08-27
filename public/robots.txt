@@ -1,0 +1,14 @@
+# Robots.txt for Akardaya MyAds
+User-agent: *
+Allow: /
+Disallow: /admin
+
+# Google & Bing Crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Sitemap Location
+Sitemap: https://akardayamyads.com/sitemap.xml

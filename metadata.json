@@ -1,0 +1,8 @@
+{
+  "name": "Akardaya MyAds - Portal Promosi & Langganan Iklan",
+  "description": "Aplikasi promosi paket iklan digital Akardaya MyAds (SMS, WA, RCS, USSD), harga spesial, kalkulator simulasi, testimoni pelanggan, dan dashboard admin dengan sinkronisasi real-time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

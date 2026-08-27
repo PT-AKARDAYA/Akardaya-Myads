@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  }
+
+  body {
+    @apply antialiased;
+  }
+}
+
+/* Custom Scrollbar for matrix table and selectors */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+}
+
+@keyframes heartBreath {
+  0%, 100% {
+    transform: scale(0.95);
+    filter: drop-shadow(0 0 2px rgba(244, 63, 94, 0.3));
+  }
+  15% {
+    transform: scale(1.22);
+    filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.6));
+  }
+  30% {
+    transform: scale(1.02);
+  }
+  45% {
+    transform: scale(1.26);
+    filter: drop-shadow(0 0 8px rgba(244, 63, 94, 0.7));
+  }
+  70% {
+    transform: scale(0.98);
+  }
+}
+
+.animate-heart-breath {
+  animation: heartBreath 1.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes marqueeRTL {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-rtl {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marqueeRTL 22s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee-rtl:hover,
+.animate-marquee-rtl:active {
+  animation-play-state: paused;
+}
