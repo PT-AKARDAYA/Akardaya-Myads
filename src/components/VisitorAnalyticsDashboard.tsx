@@ -168,6 +168,10 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
               </span>
             )}
 
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white border border-white/20">
+              <span>✨ Hemat Baris Aktif (1 Baris/Hari/Visitor)</span>
+            </span>
+
             {lastSyncTime && (
               <span className="text-[10px] text-red-200 opacity-90">
                 Pembaruan: {lastSyncTime}
@@ -399,6 +403,12 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
                               {log.page}
                             </code>
                           </span>
+                          {log.hits && log.hits > 1 ? (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 text-[10px] font-extrabold flex items-center gap-0.5">
+                              <TrendingUp className="w-2.5 h-2.5" />
+                              {log.hits}x Kunjungan Hari Ini
+                            </span>
+                          ) : null}
                           {log.eventType === 'order_submit' && (
                             <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-bold">
                               🛒 Order Dikirim
@@ -412,6 +422,12 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
                           <span>{log.browser || 'Browser'}</span>
                           <span>•</span>
                           <span className="text-slate-400">{log.referrer || 'Langsung'}</span>
+                          {log.visitorId && (
+                            <>
+                              <span>•</span>
+                              <span className="font-mono text-[10px] text-slate-400">ID: {log.visitorId.slice(0, 10)}...</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

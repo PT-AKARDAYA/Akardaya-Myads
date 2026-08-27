@@ -5,12 +5,16 @@ export interface VisitorRecord {
   visitorId: string;
   timestamp: string;
   page: string;
-  device: 'Mobile' | 'Desktop' | 'Tablet';
+  device: 'Mobile' | 'Desktop' | 'Tablet' | string;
   browser: string;
   referrer: string;
-  screen: string;
-  language: string;
-  eventType?: 'pageview' | 'order_submit' | 'package_view' | 'simulasi';
+  screen?: string;
+  language?: string;
+  eventType?: 'pageview' | 'order_submit' | 'package_view' | 'simulasi' | string;
+  hits?: number;
+  date?: string;
+  firstTime?: string;
+  lastTime?: string;
 }
 
 export interface LocalAnalyticsSummary {
@@ -173,13 +177,41 @@ export function trackRealVisitor(
       eventType,
     };
 
-    // Save locally (keep last 200 records)
+    // Save locally with daily consolidation per visitor ID (keep last 200 records)
     try {
       const existing = localStorage.getItem(STORAGE_KEY);
       const logs: VisitorRecord[] = existing ? JSON.parse(existing) : [];
-      logs.unshift(record);
-      if (logs.length > 200) {
-        logs.pop();
+      const todayDate = jakartaNow.substring(0, 10);
+      
+      const existingTodayIdx = logs.findIndex(
+        (l) => l.visitorId === visitorId && (l.date === todayDate || (l.timestamp && l.timestamp.includes(todayDate)))
+      );
+
+      if (existingTodayIdx !== -1) {
+        const existingRecord = logs[existingTodayIdx];
+        const newHits = (existingRecord.hits || 1) + 1;
+        const pageArr = (existingRecord.page || '').split(',').map((s) => s.trim()).filter(Boolean);
+        if (!pageArr.includes(page)) {
+          pageArr.push(page);
+        }
+        logs[existingTodayIdx] = {
+          ...existingRecord,
+          hits: newHits,
+          page: pageArr.join(', '),
+          lastTime: jakartaNow,
+          timestamp: jakartaNow,
+        };
+      } else {
+        logs.unshift({
+          ...record,
+          hits: 1,
+          date: todayDate,
+          firstTime: jakartaNow,
+          lastTime: jakartaNow,
+        });
+        if (logs.length > 200) {
+          logs.pop();
+        }
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
     } catch {
@@ -334,7 +366,13 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
     };
   }
 
-  const totalViews = logs.length;
+  // Accumulate total views by summing up hits from each consolidated log row
+  let totalViews = 0;
+  logs.forEach((l) => {
+    totalViews += Math.max(l.hits || 1, 1);
+  });
+  if (totalViews === 0 && logs.length > 0) totalViews = logs.length;
+
   const uniqueVisitorIds = new Set(logs.map((l) => l.visitorId || 'unknown'));
   const uniqueVisitors = Math.max(1, uniqueVisitorIds.size);
 
@@ -345,12 +383,13 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
 
   logs.forEach((l) => {
     const dev = (l.device || '').toLowerCase();
+    const hits = Math.max(l.hits || 1, 1);
     if (dev.includes('mob') || dev.includes('hp') || dev.includes('phone') || dev.includes('android') || dev.includes('iphone')) {
-      mobileCount++;
+      mobileCount += hits;
     } else if (dev.includes('tab') || dev.includes('ipad')) {
-      tabletCount++;
+      tabletCount += hits;
     } else {
-      desktopCount++;
+      desktopCount += hits;
     }
   });
 
@@ -367,8 +406,17 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
   // Top Pages
   const pageMap: Record<string, number> = {};
   logs.forEach((l) => {
-    const p = l.page || '/';
-    pageMap[p] = (pageMap[p] || 0) + 1;
+    const rawPage = l.page || '/';
+    const hits = Math.max(l.hits || 1, 1);
+    if (rawPage.includes(',')) {
+      const parts = rawPage.split(',').map((s) => s.trim()).filter(Boolean);
+      const weightPerPart = Math.max(1, Math.round(hits / (parts.length || 1)));
+      parts.forEach((p) => {
+        pageMap[p] = (pageMap[p] || 0) + weightPerPart;
+      });
+    } else {
+      pageMap[rawPage] = (pageMap[rawPage] || 0) + hits;
+    }
   });
   const topPages = Object.entries(pageMap)
     .map(([page, count]) => ({ page, count }))
@@ -379,7 +427,8 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
   const browserMap: Record<string, number> = {};
   logs.forEach((l) => {
     const b = l.browser || 'Google Chrome';
-    browserMap[b] = (browserMap[b] || 0) + 1;
+    const hits = Math.max(l.hits || 1, 1);
+    browserMap[b] = (browserMap[b] || 0) + hits;
   });
   const topBrowsers = Object.entries(browserMap)
     .map(([browser, count]) => ({ browser, count }))
@@ -390,7 +439,8 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
   const dayMap: Record<string, number> = {};
   logs.forEach((l) => {
     const parsed = parseVisitorTimestamp(l.timestamp);
-    dayMap[parsed.dateStr] = (dayMap[parsed.dateStr] || 0) + 1;
+    const hits = Math.max(l.hits || 1, 1);
+    dayMap[parsed.dateStr] = (dayMap[parsed.dateStr] || 0) + hits;
   });
 
   const days: { date: string; label: string; count: number }[] = [];

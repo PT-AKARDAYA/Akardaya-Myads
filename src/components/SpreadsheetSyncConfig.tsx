@@ -505,6 +505,13 @@ function saveAllSheets(ss, data) {
       color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800',
       desc: 'Catatan formulir pesanan masuk otomatis dari pengunjung website.',
     },
+    {
+      name: 'Analytics_Logs',
+      label: 'Log Pengunjung (Hemat Baris)',
+      icon: Database,
+      color: 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-800',
+      desc: 'Rekap analitik pengunjung riil. Kunjungan di hari yang sama digabung dalam 1 baris (hemat baris otomatis).',
+    },
   ];
 
   return (

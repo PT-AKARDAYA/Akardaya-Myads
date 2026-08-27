@@ -126,7 +126,7 @@ function setupSheets() {
   if (!ss.getSheetByName("Analytics_Logs")) {
     const s = ss.insertSheet("Analytics_Logs");
     s.appendRow([
-      "Timestamp", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"
+      "Tanggal (WIB)", "Visitor ID", "Total Hits", "Halaman Dikunjungi", "Perangkat", "Browser", "Sumber / Referrer", "Waktu Pertama (WIB)", "Terakhir Aktif (WIB)"
     ]);
     s.setFrozenRows(1);
     formatHeader(s, "#0F766E"); // Teal header
@@ -186,30 +186,9 @@ function doGet(e) {
 
     // Dukungan pelacakan via GET request
     if (action === "track_visitor") {
-      const analyticsSheetName = "Analytics_Logs";
-      let sheet = ss.getSheetByName(analyticsSheetName);
-      if (!sheet) {
-        sheet = ss.insertSheet(analyticsSheetName);
-        sheet.appendRow(["Timestamp (WIB)", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"]);
-        sheet.setFrozenRows(1);
-        formatHeader(sheet, "#0F766E");
-      }
       const p = e && e.parameter ? e.parameter : {};
-      const jakartaTimestamp = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss") + " WIB";
-      sheet.appendRow([
-        jakartaTimestamp,
-        p.visitorId || "unknown",
-        p.page || "/",
-        p.device || "Unknown",
-        p.browser || "Unknown",
-        p.referrer || "Direct",
-        p.eventType || "pageview",
-        p.screen || "Unknown"
-      ]);
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "success",
-        message: "Visitor tracked via GET successfully"
-      })).setMimeType(ContentService.MimeType.JSON);
+      const trackResult = recordVisitorLogConsolidated(ss, p);
+      return ContentService.createTextOutput(JSON.stringify(trackResult)).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -308,35 +287,10 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 4. Fitur Pelacakan Analitik Pengunjung (Lintas HP)
+    // 4. Fitur Pelacakan Analitik Pengunjung (Hemat Baris per Hari)
     if (action === "track_visitor") {
-      const analyticsSheetName = "Analytics_Logs";
-      let sheet = ss.getSheetByName(analyticsSheetName);
-      
-      if (!sheet) {
-        sheet = ss.insertSheet(analyticsSheetName);
-        sheet.appendRow(["Timestamp (WIB)", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"]);
-        sheet.setFrozenRows(1);
-        formatHeader(sheet, "#0F766E"); // Teal header
-      }
-      
-      const jakartaTimestamp = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss") + " WIB";
-      
-      sheet.appendRow([
-        jakartaTimestamp,
-        requestBody.visitorId || "unknown",
-        requestBody.page || "/",
-        requestBody.device || "Unknown",
-        requestBody.browser || "Unknown",
-        requestBody.referrer || "Direct",
-        requestBody.eventType || "pageview",
-        requestBody.screen || "Unknown"
-      ]);
-      
-      return ContentService.createTextOutput(JSON.stringify({ 
-        status: "success", 
-        message: "Visitor tracked successfully" 
-      })).setMimeType(ContentService.MimeType.JSON);
+      const trackResult = recordVisitorLogConsolidated(ss, requestBody);
+      return ContentService.createTextOutput(JSON.stringify(trackResult)).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -494,18 +448,169 @@ function readAnalyticsSheet(ss) {
   const lastRow = sheet.getLastRow();
   const numRows = Math.min(lastRow - 1, 1000);
   const startRow = lastRow - numRows + 1;
-  const rows = sheet.getRange(startRow, 1, numRows, 8).getValues();
+  const lastCol = Math.max(sheet.getLastColumn(), 9);
+  const rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
 
-  return rows.map(r => ({
-    timestamp: String(r[0] || ""),
-    visitorId: String(r[1] || ""),
-    page: String(r[2] || "/"),
-    device: String(r[3] || "Unknown"),
-    browser: String(r[4] || "Unknown"),
-    referrer: String(r[5] || "Direct"),
-    eventType: String(r[6] || "pageview"),
-    screen: String(r[7] || "")
-  })).reverse();
+  return rows.map(r => {
+    const col0 = String(r[0] || "");
+    const col1 = String(r[1] || "");
+    const col2 = r[2];
+    // Check if new consolidated format where col2 is numeric Hits
+    const isNumericHits = typeof col2 === "number" || (!isNaN(Number(col2)) && String(col2).trim() !== "" && !String(col2).includes("/"));
+    
+    if (isNumericHits) {
+      const hits = Math.max(Number(col2) || 1, 1);
+      const pages = String(r[3] || "/");
+      const device = String(r[4] || "Unknown");
+      const browser = String(r[5] || "Unknown");
+      const referrer = String(r[6] || "Direct");
+      const firstTime = String(r[7] || "");
+      const lastTime = String(r[8] || "");
+      const fullTimestamp = col0 + (lastTime ? " " + lastTime : "");
+
+      return {
+        timestamp: fullTimestamp,
+        date: col0,
+        visitorId: col1,
+        hits: hits,
+        page: pages,
+        device: device,
+        browser: browser,
+        referrer: referrer,
+        eventType: "pageview",
+        firstTime: firstTime,
+        lastTime: lastTime
+      };
+    } else {
+      // Legacy format (8 columns without consolidation)
+      return {
+        timestamp: col0,
+        visitorId: col1,
+        hits: 1,
+        page: String(r[2] || "/"),
+        device: String(r[3] || "Unknown"),
+        browser: String(r[4] || "Unknown"),
+        referrer: String(r[5] || "Direct"),
+        eventType: String(r[6] || "pageview"),
+        screen: String(r[7] || "")
+      };
+    }
+  }).reverse();
+}
+
+/**
+ * Fungsi Pintar: Menghemat Baris Spreadsheet dengan Menggabungkan Kunjungan Visitor ID di Hari yang Sama
+ */
+function recordVisitorLogConsolidated(ss, p) {
+  const analyticsSheetName = "Analytics_Logs";
+  let sheet = ss.getSheetByName(analyticsSheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(analyticsSheetName);
+    sheet.appendRow([
+      "Tanggal (WIB)",
+      "Visitor ID",
+      "Total Hits",
+      "Halaman Dikunjungi",
+      "Perangkat",
+      "Browser",
+      "Sumber / Referrer",
+      "Waktu Pertama (WIB)",
+      "Terakhir Aktif (WIB)"
+    ]);
+    sheet.setFrozenRows(1);
+    formatHeader(sheet, "#0F766E"); // Teal header
+  }
+
+  const visitorId = String(p.visitorId || "unknown").trim();
+  const page = String(p.page || "/").trim();
+  const device = String(p.device || "Unknown").trim();
+  const browser = String(p.browser || "Unknown").trim();
+  const referrer = String(p.referrer || "Direct").trim();
+
+  // Waktu saat ini di zona Asia/Jakarta
+  const now = new Date();
+  const todayDateStr = Utilities.formatDate(now, "Asia/Jakarta", "yyyy-MM-dd");
+  const timeNowStr = Utilities.formatDate(now, "Asia/Jakarta", "HH:mm:ss") + " WIB";
+
+  const lastRow = sheet.getLastRow();
+  let foundRowIndex = -1;
+  let existingHits = 1;
+  let existingPages = "";
+  let existingFirstTime = timeNowStr;
+
+  if (lastRow > 1) {
+    // Cari dalam baris terbaru apakah ada visitorId yang sama di tanggal hari ini
+    const checkRows = Math.min(lastRow - 1, 500);
+    const startRow = lastRow - checkRows + 1;
+    const maxCol = Math.max(sheet.getLastColumn(), 9);
+    const dataRange = sheet.getRange(startRow, 1, checkRows, maxCol).getValues();
+
+    for (let i = dataRange.length - 1; i >= 0; i--) {
+      const row = dataRange[i];
+      const rowDateOrTs = String(row[0] || "");
+      const rowVisitorId = String(row[1] || "").trim();
+
+      const isDateMatch = rowDateOrTs.indexOf(todayDateStr) !== -1;
+      const isVisitorMatch = rowVisitorId === visitorId && visitorId !== "unknown";
+
+      if (isDateMatch && isVisitorMatch) {
+        foundRowIndex = startRow + i; // Baris riil di sheet (1-indexed)
+        const col2Val = row[2];
+        existingHits = Number(col2Val) || 1;
+        existingPages = String(row[3] || "");
+        existingFirstTime = String(row[7] || timeNowStr);
+        break;
+      }
+    }
+  }
+
+  if (foundRowIndex > 0) {
+    // PENGUNJUNG SAMA DI HARI YANG SAMA -> UPDATE BARIS (HEMAT BARIS!)
+    const newHits = existingHits + 1;
+    
+    // Gabungkan riwayat halaman unik yang dikunjungi
+    let pageList = existingPages ? existingPages.split(",").map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    if (pageList.indexOf(page) === -1) {
+      pageList.push(page);
+    }
+    const updatedPages = pageList.join(", ");
+
+    // Update kolom Total Hits (kolom 3), Halaman (kolom 4), Perangkat (kolom 5), Browser (kolom 6), Terakhir Aktif (kolom 9)
+    sheet.getRange(foundRowIndex, 3).setValue(newHits);
+    sheet.getRange(foundRowIndex, 4).setValue(updatedPages);
+    if (device && device !== "Unknown") sheet.getRange(foundRowIndex, 5).setValue(device);
+    if (browser && browser !== "Unknown") sheet.getRange(foundRowIndex, 6).setValue(browser);
+    sheet.getRange(foundRowIndex, 9).setValue(timeNowStr);
+
+    return {
+      status: "success",
+      message: "Visitor log consolidated (Row " + foundRowIndex + ", Total Hits: " + newHits + ")",
+      consolidated: true,
+      row: foundRowIndex,
+      hits: newHits
+    };
+  } else {
+    // PENGUNJUNG ATAU HARI BARU -> BUAT 1 BARIS BARU
+    sheet.appendRow([
+      todayDateStr,
+      visitorId,
+      1,
+      page,
+      device,
+      browser,
+      referrer,
+      timeNowStr,
+      timeNowStr
+    ]);
+
+    return {
+      status: "success",
+      message: "New daily visitor row created",
+      consolidated: false,
+      hits: 1
+    };
+  }
 }
 
 function readLeadsSheet(ss) {
