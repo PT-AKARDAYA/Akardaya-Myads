@@ -122,6 +122,16 @@ function setupSheets() {
     formatHeader(s, "#DC2626"); // Red header
   }
 
+  // 8. Sheet ANALITIK_PENGUNJUNG (Analytics_Logs)
+  if (!ss.getSheetByName("Analytics_Logs")) {
+    const s = ss.insertSheet("Analytics_Logs");
+    s.appendRow([
+      "Timestamp", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"
+    ]);
+    s.setFrozenRows(1);
+    formatHeader(s, "#0F766E"); // Teal header
+  }
+
   // Hapus Sheet1 default jika kosong
   const defaultSheet = ss.getSheetByName("Sheet1");
   if (defaultSheet && ss.getSheets().length > 1 && defaultSheet.getLastRow() === 0) {
