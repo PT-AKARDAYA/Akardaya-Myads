@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from './context/AppContext';
 import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation } from './types';
 import { AkarDayaLogo } from './components/AkarDayaLogo';
+import { VisitorAnalyticsDashboard } from './components/VisitorAnalyticsDashboard';
+import { SpreadsheetSyncConfig } from './components/SpreadsheetSyncConfig';
 import {
   ShieldCheck,
   Layers,
@@ -34,6 +36,10 @@ import {
   Building2,
   Navigation,
   Compass,
+  BarChart3,
+  Users,
+  Activity,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -51,7 +57,7 @@ export const AdminApp: React.FC = () => {
 
   // Local editable draft
   const [draftData, setDraftData] = useState<AppData>(data);
-  const [activeTab, setActiveTab] = useState<'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('PACKAGES');
+  const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'SPREADSHEET' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
@@ -484,6 +490,40 @@ export const AdminApp: React.FC = () => {
         <aside className="w-full md:w-64 shrink-0 space-y-4">
           <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex md:flex-col gap-1.5 overflow-x-auto no-scrollbar">
             <button
+              onClick={() => setActiveTab('ANALYTICS')}
+              className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
+                activeTab === 'ANALYTICS'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 shrink-0 text-amber-400" />
+              <div className="flex-1">
+                <span>Pengunjung & Analitik</span>
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-600 dark:text-amber-300 text-[9px] font-bold">
+                  Live
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('SPREADSHEET')}
+              className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
+                activeTab === 'SPREADSHEET'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-500" />
+              <div className="flex-1">
+                <span>Database Spreadsheet</span>
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-400/20 text-emerald-600 dark:text-emerald-300 text-[9px] font-bold">
+                  Auto-Sync
+                </span>
+              </div>
+            </button>
+
+            <button
               onClick={() => setActiveTab('PACKAGES')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'PACKAGES'
@@ -633,6 +673,23 @@ export const AdminApp: React.FC = () => {
 
         {/* Right Main Management Workspace */}
         <main className="flex-1 min-w-0 space-y-4">
+          {/* TAB 0: ANALYTICS */}
+          {activeTab === 'ANALYTICS' && (
+            <VisitorAnalyticsDashboard />
+          )}
+
+          {/* TAB 0.5: SPREADSHEET SYNC */}
+          {activeTab === 'SPREADSHEET' && (
+            <SpreadsheetSyncConfig
+              companyConfig={draftData.companyConfig}
+              onChange={(updatedCompanyConfig) =>
+                setDraftData({ ...draftData, companyConfig: updatedCompanyConfig })
+              }
+              onSave={handleSaveAll}
+              isSaving={isSaving}
+            />
+          )}
+
           {/* TAB 1: PACKAGES */}
           {activeTab === 'PACKAGES' && (
             <div className="space-y-4">

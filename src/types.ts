@@ -55,6 +55,7 @@ export interface CompanyConfig {
   operatingHours: string;
   announcementText: string;
   showAnnouncement: boolean;
+  spreadsheetUrl?: string; // Google Apps Script Web App Deployment URL
 }
 
 export interface Testimonial {

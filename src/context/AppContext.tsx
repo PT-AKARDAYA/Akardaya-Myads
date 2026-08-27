@@ -84,13 +84,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Fetch initial data via REST fallback and localStorage
   const fetchInitialData = useCallback(async () => {
     // 1. Try loading from localStorage first (for offline / GitHub Pages static mode)
+    let currentData = INITIAL_APP_DATA;
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('akardaya_app_data');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && parsed.packages) {
-            setData(safeNormalizeData(parsed));
+            currentData = safeNormalizeData(parsed);
+            setData(currentData);
           }
         }
       } catch (e) {
@@ -98,7 +100,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 2. Try fetching from server API if running in full-stack mode
+    // 2. Try fetching from Google Spreadsheet (if configured)
+    const spreadsheetUrl = currentData.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
+      try {
+        const fetchUrl = spreadsheetUrl.includes('?') ? `${spreadsheetUrl}&action=GET_DATA` : `${spreadsheetUrl}?action=GET_DATA`;
+        const sheetRes = await fetch(fetchUrl);
+        if (sheetRes.ok) {
+          const sheetJson = await sheetRes.json();
+          if (sheetJson && sheetJson.data && sheetJson.data.packages) {
+            const sheetMerged = safeNormalizeData(sheetJson.data);
+            setData(sheetMerged);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('akardaya_app_data', JSON.stringify(sheetMerged));
+            }
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (sheetErr) {
+        console.log('Error loading from Google Spreadsheet, falling back:', sheetErr);
+      }
+    }
+
+    // 3. Try fetching from server API if running in full-stack mode
     try {
       const res = await fetch('/api/data');
       if (res.ok) {
@@ -211,9 +236,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setData(merged);
     if (typeof window !== 'undefined') {
       localStorage.setItem('akardaya_app_data', JSON.stringify(merged));
+      if (merged.companyConfig?.spreadsheetUrl) {
+        localStorage.setItem('akardaya_spreadsheet_url', merged.companyConfig.spreadsheetUrl);
+      }
     }
 
-    // 2. Try updating server if running full-stack
+    let syncedToGoogleSheet = false;
+
+    // 2. Try syncing to Google Spreadsheet if configured
+    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
+      try {
+        await fetch(spreadsheetUrl, {
+          method: 'POST',
+          mode: 'no-cors', // Google Apps Script Web App standard
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'SAVE_DATA',
+            payload: merged,
+          }),
+        });
+        syncedToGoogleSheet = true;
+      } catch (sheetErr) {
+        console.error('Error syncing to Google Apps Script:', sheetErr);
+      }
+    }
+
+    // 3. Try updating server if running full-stack
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
@@ -234,7 +283,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.log('Saved to browser localStorage');
     }
     
-    showToast('✅ Perubahan berhasil disimpan di browser & siap digunakan!', 'success');
+    if (syncedToGoogleSheet) {
+      showToast('✅ Perubahan berhasil disimpan ke Google Spreadsheet & siap disinkronkan ke semua pengguna!', 'success');
+    } else {
+      showToast('✅ Perubahan berhasil disimpan di browser & siap digunakan!', 'success');
+    }
     return true;
   };
 
@@ -254,6 +307,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setData(merged);
     if (typeof window !== 'undefined') {
       localStorage.setItem('akardaya_app_data', JSON.stringify(merged));
+    }
+
+    // Sync to Google Spreadsheet
+    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
+      try {
+        await fetch(spreadsheetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'ADD_REVIEW',
+            review: newTestimonial,
+          }),
+        });
+      } catch (err) {
+        console.log('Google sheet review error:', err);
+      }
     }
 
     try {
@@ -285,6 +356,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setData(merged);
     if (typeof window !== 'undefined') {
       localStorage.setItem('akardaya_app_data', JSON.stringify(merged));
+    }
+
+    // Sync lead to Google Spreadsheet
+    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
+      try {
+        await fetch(spreadsheetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'ADD_LEAD',
+            lead: {
+              id: newOrder.id,
+              clientName: newOrder.customerName,
+              phone: newOrder.whatsapp,
+              packageName: newOrder.selectedPackageName,
+              channel: newOrder.estimatedBudget,
+              status: 'PENDING',
+              notes: newOrder.notes || '',
+            },
+          }),
+        });
+      } catch (err) {
+        console.log('Google sheet lead error:', err);
+      }
     }
 
     try {
