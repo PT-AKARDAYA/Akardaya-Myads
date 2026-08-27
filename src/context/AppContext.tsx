@@ -125,9 +125,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDarkMode((prev) => !prev);
   };
 
+  // Background Spreadsheet & Cross-Tab Sync Engine
+  const lastSyncTimestampRef = useRef<string>('');
+  const isSyncingRef = useRef<boolean>(false);
+
+  // Silent background fetcher from Google Spreadsheet or Server
+  const syncLatestData = useCallback(async (silent = true) => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+
+    try {
+      // 1. Check Google Spreadsheet first if URL is configured
+      const savedStorageUrl = typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null;
+      const spreadsheetUrl = data.companyConfig?.spreadsheetUrl || savedStorageUrl;
+
+      if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
+        try {
+          const fetchUrl = spreadsheetUrl.includes('?') 
+            ? `${spreadsheetUrl}&action=GET_DATA&_t=${Date.now()}` 
+            : `${spreadsheetUrl}?action=GET_DATA&_t=${Date.now()}`;
+          
+          const sheetRes = await fetch(fetchUrl);
+          if (sheetRes.ok) {
+            const sheetJson = await sheetRes.json();
+            if (sheetJson && sheetJson.status === 'success' && sheetJson.data && sheetJson.data.packages) {
+              const remoteData = safeNormalizeData(sheetJson.data);
+              const remoteTimestamp = remoteData.lastUpdated || sheetJson.timestamp || '';
+              
+              // Only update state if data timestamp changed or initial sync
+              if (!lastSyncTimestampRef.current || remoteTimestamp !== lastSyncTimestampRef.current) {
+                lastSyncTimestampRef.current = remoteTimestamp;
+                setData(remoteData);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('akardaya_app_data', JSON.stringify(remoteData));
+                }
+                if (!silent) {
+                  showToast('✨ Data terbaru dari Google Spreadsheet berhasil dimuat', 'info');
+                }
+              }
+              setIsLoading(false);
+              isSyncingRef.current = false;
+              return;
+            }
+          }
+        } catch (sheetErr) {
+          // Spreadsheet request silent failover
+        }
+      }
+
+      // 2. Server API fallback for fullstack mode
+      try {
+        const res = await fetch(`/api/data?_t=${Date.now()}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.packages) {
+            const remoteData = safeNormalizeData(json);
+            if (!lastSyncTimestampRef.current || remoteData.lastUpdated !== lastSyncTimestampRef.current) {
+              lastSyncTimestampRef.current = remoteData.lastUpdated || '';
+              setData(remoteData);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('akardaya_app_data', JSON.stringify(remoteData));
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Standalone/static mode
+      }
+    } finally {
+      setIsLoading(false);
+      isSyncingRef.current = false;
+    }
+  }, [data.companyConfig?.spreadsheetUrl, showToast]);
+
   // Fetch initial data via REST fallback and localStorage
   const fetchInitialData = useCallback(async () => {
-    // 1. Try loading from localStorage first (for offline / GitHub Pages static mode)
+    // 1. Try loading from localStorage first (for instant first paint)
     let currentData = INITIAL_APP_DATA;
     if (typeof window !== 'undefined') {
       try {
@@ -137,6 +210,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (parsed && parsed.packages) {
             currentData = safeNormalizeData(parsed);
             setData(currentData);
+            lastSyncTimestampRef.current = currentData.lastUpdated || '';
           }
         }
       } catch (e) {
@@ -144,47 +218,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 2. Try fetching from Google Spreadsheet (if configured)
-    const spreadsheetUrl = currentData.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
-    if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
-      try {
-        const fetchUrl = spreadsheetUrl.includes('?') ? `${spreadsheetUrl}&action=GET_DATA` : `${spreadsheetUrl}?action=GET_DATA`;
-        const sheetRes = await fetch(fetchUrl);
-        if (sheetRes.ok) {
-          const sheetJson = await sheetRes.json();
-          if (sheetJson && sheetJson.data && sheetJson.data.packages) {
-            const sheetMerged = safeNormalizeData(sheetJson.data);
-            setData(sheetMerged);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('akardaya_app_data', JSON.stringify(sheetMerged));
-            }
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (sheetErr) {
-        console.log('Error loading from Google Spreadsheet, falling back:', sheetErr);
-      }
-    }
-
-    // 3. Try fetching from server API if running in full-stack mode
-    try {
-      const res = await fetch('/api/data');
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.packages) {
-          setData(safeNormalizeData(json));
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('akardaya_app_data', JSON.stringify(json));
-          }
-        }
-      }
-    } catch (err) {
-      console.log('Static hosting mode or server not present, using local storage.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    // 2. Fetch fresh data in background immediately
+    await syncLatestData(true);
+  }, [syncLatestData]);
 
   // Initialize WebSocket connection or Fallback to Static Online Mode
   const connectWebSocket = useCallback(() => {
@@ -259,9 +295,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [showToast]);
 
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+
   useEffect(() => {
     fetchInitialData();
     connectWebSocket();
+
+    // 1. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('akardaya_live_data_sync');
+        broadcastChannelRef.current = bc;
+
+        bc.onmessage = (event) => {
+          if (event.data && event.data.type === 'DATA_UPDATED' && event.data.payload) {
+            const updated = safeNormalizeData(event.data.payload);
+            lastSyncTimestampRef.current = updated.lastUpdated || '';
+            setData(updated);
+            showToast('🔄 Tampilan otomatis diperbarui mengikuti perubahan admin', 'info');
+          }
+        };
+      }
+    } catch (e) {
+      console.warn('BroadcastChannel not supported:', e);
+    }
+
+    // 2. Storage event listener fallback for browsers/tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'akardaya_app_data' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && parsed.packages) {
+            const updated = safeNormalizeData(parsed);
+            setData(updated);
+          }
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // 3. Auto sync when user returns / focuses the browser tab
+    const handleFocus = () => {
+      syncLatestData(true);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncLatestData(true);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 4. Background polling timer (Every 20 seconds) to fetch spreadsheet updates across all users
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncLatestData(true);
+      }
+    }, 20000);
 
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -270,24 +362,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (wsRef.current) {
         wsRef.current.close();
       }
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.close();
+      }
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(pollInterval);
     };
-  }, [fetchInitialData, connectWebSocket]);
+  }, [fetchInitialData, connectWebSocket, syncLatestData, showToast]);
 
   // Update AppData (Admin)
   const updateAppData = async (newData: Partial<AppData>): Promise<boolean> => {
     // 1. Always update local state and localStorage
-    const merged = safeNormalizeData({ ...data, ...newData });
+    const merged = safeNormalizeData({ 
+      ...data, 
+      ...newData,
+      lastUpdated: new Date().toISOString()
+    });
+    
+    lastSyncTimestampRef.current = merged.lastUpdated;
     setData(merged);
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('akardaya_app_data', JSON.stringify(merged));
       if (merged.companyConfig?.spreadsheetUrl) {
         localStorage.setItem('akardaya_spreadsheet_url', merged.companyConfig.spreadsheetUrl);
       }
+      
+      // Broadcast to other open tabs in real-time
+      try {
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.postMessage({
+            type: 'DATA_UPDATED',
+            payload: merged,
+          });
+        }
+      } catch (e) {
+        console.warn('Broadcast error:', e);
+      }
+    }
+
+    // Also send via WebSocket if connected
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: 'UPDATE_DATA',
+          payload: merged,
+        }));
+      } catch (e) {
+        console.warn('WS send error:', e);
+      }
     }
 
     let syncedToGoogleSheet = false;
 
-    // 2. Try syncing to Google Spreadsheet if configured
+    // 2. Sync to Google Spreadsheet if configured
     const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
     if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
       try {
@@ -311,7 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newData),
+        body: JSON.stringify(merged),
       });
 
       if (res.ok) {
@@ -323,14 +453,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch (err) {
-      // Static mode (GitHub Pages) fallback
-      console.log('Saved to browser localStorage');
+      // Static mode fallback
     }
     
     if (syncedToGoogleSheet) {
-      showToast('✅ Perubahan berhasil disimpan ke Google Spreadsheet & siap disinkronkan ke semua pengguna!', 'success');
+      showToast('✅ Perubahan berhasil disimpan ke Google Spreadsheet & otomatis terupdate ke pengguna!', 'success');
     } else {
-      showToast('✅ Perubahan berhasil disimpan di browser & siap digunakan!', 'success');
+      showToast('✅ Perubahan berhasil disimpan & langsung aktif!', 'success');
     }
     return true;
   };
