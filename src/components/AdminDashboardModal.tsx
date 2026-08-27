@@ -29,24 +29,50 @@ import {
   Navigation,
   Compass,
   BarChart3,
+  RefreshCw,
 } from 'lucide-react';
 
 export const AdminDashboardModal: React.FC = () => {
-  const { data, isAdminOpen, setIsAdminOpen, updateAppData, resetToDefaults, isConnected, activeUsers } = useApp();
+  const { data, isAdminOpen, setIsAdminOpen, updateAppData, resetToDefaults, isConnected, activeUsers, refreshData, showToast } = useApp();
   
   // Local editable draft of AppData
   const [draftData, setDraftData] = useState<AppData>(data);
   const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshingLeads, setIsRefreshingLeads] = useState(false);
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
 
-  // Sync draft data when modal opens
+  // Sync draft data when modal opens or server data updates
   React.useEffect(() => {
     if (isAdminOpen) {
       setDraftData(JSON.parse(JSON.stringify(data)));
     }
   }, [isAdminOpen, data]);
+
+  // Real-time polling when modal is on Leads tab
+  React.useEffect(() => {
+    if (isAdminOpen && activeTab === 'LEADS') {
+      refreshData(true);
+      const interval = setInterval(() => {
+        refreshData(true);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isAdminOpen, activeTab, refreshData]);
+
+  const handleManualRefreshLeads = async () => {
+    setIsRefreshingLeads(true);
+    await refreshData(false);
+    setIsRefreshingLeads(false);
+  };
+
+  const handleUpdateLeadStatus = async (orderId: string, status: 'PENDING' | 'CONTACTED' | 'COMPLETED') => {
+    const updatedOrders = (draftData.orders || []).map((o) => (o.id === orderId ? { ...o, status } : o));
+    setDraftData((prev) => ({ ...prev, orders: updatedOrders }));
+    await updateAppData({ orders: updatedOrders });
+    showToast(`Status pesanan diperbarui ke: ${status}`, 'success');
+  };
 
   if (!isAdminOpen) return null;
 
@@ -1085,13 +1111,31 @@ export const AdminDashboardModal: React.FC = () => {
           {/* TAB 6: ORDERS / LEADS */}
           {activeTab === 'LEADS' && (
             <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Daftar Pesanan & Lead Konsultasi Masuk
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Daftar calon klien yang mengisi formulir pemesanan dan tersinkron secara real-time.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 shadow-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Daftar Pesanan & Lead Konsultasi Masuk ({(draftData.orders || []).length})
+                    </h3>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Real-Time
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Otomatis diperbarui langsung saat calon klien mengirim pesanan tanpa perlu refresh halaman.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleManualRefreshLeads}
+                  disabled={isRefreshingLeads}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer disabled:opacity-60"
+                  title="Periksa pesanan baru sekarang"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isRefreshingLeads ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingLeads ? 'Menyinkronkan...' : 'Segarkan'}</span>
+                </button>
               </div>
 
               {(!draftData.orders || draftData.orders.length === 0) ? (
@@ -1106,7 +1150,7 @@ export const AdminDashboardModal: React.FC = () => {
                       className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <strong className="text-slate-900 dark:text-white font-bold text-sm">
                             {order.customerName}
                           </strong>
@@ -1115,8 +1159,10 @@ export const AdminDashboardModal: React.FC = () => {
                               ({order.businessName})
                             </span>
                           )}
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          <select
+                            value={order.status}
+                            onChange={(e: any) => handleUpdateLeadStatus(order.id, e.target.value)}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border-none cursor-pointer ${
                               order.status === 'COMPLETED'
                                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                                 : order.status === 'CONTACTED'
@@ -1124,8 +1170,10 @@ export const AdminDashboardModal: React.FC = () => {
                                 : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
                             }`}
                           >
-                            {order.status}
-                          </span>
+                            <option value="PENDING">PENDING</option>
+                            <option value="CONTACTED">CONTACTED</option>
+                            <option value="COMPLETED">COMPLETED</option>
+                          </select>
                         </div>
 
                         <p className="text-slate-600 dark:text-slate-300">

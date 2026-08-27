@@ -38,6 +38,7 @@ import {
   BarChart3,
   Users,
   Activity,
+  RefreshCw,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -51,12 +52,14 @@ export const AdminApp: React.FC = () => {
     isDarkMode,
     toggleDarkMode,
     showToast,
+    refreshData,
   } = useApp();
 
   // Local editable draft
   const [draftData, setDraftData] = useState<AppData>(data);
   const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshingLeads, setIsRefreshingLeads] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
@@ -72,6 +75,23 @@ export const AdminApp: React.FC = () => {
   useEffect(() => {
     setDraftData(JSON.parse(JSON.stringify(data)));
   }, [data]);
+
+  // Faster background lead poller (every 4s) when activeTab is LEADS
+  useEffect(() => {
+    if (activeTab === 'LEADS') {
+      refreshData(true);
+      const interval = setInterval(() => {
+        refreshData(true);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, refreshData]);
+
+  const handleManualRefreshLeads = async () => {
+    setIsRefreshingLeads(true);
+    await refreshData(false);
+    setIsRefreshingLeads(false);
+  };
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1401,19 +1421,35 @@ export const AdminApp: React.FC = () => {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Pesanan & Leads Masuk ({(draftData.orders || []).length})
-                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Pesanan & Leads Masuk ({(draftData.orders || []).length})
+                    </h2>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Real-Time
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Calon klien yang mengisi formulir pemesanan paket promosi iklan.
+                    Otomatis diperbarui langsung saat calon klien mengirim pesanan tanpa perlu refresh.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleManualRefreshLeads}
+                    disabled={isRefreshingLeads}
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-60"
+                    title="Periksa pesanan baru sekarang"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isRefreshingLeads ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshingLeads ? 'Menyinkronkan...' : 'Segarkan'}</span>
+                  </button>
+
                   <select
                     value={leadStatusFilter}
                     onChange={(e: any) => setLeadStatusFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
+                    className="px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium cursor-pointer"
                   >
                     <option value="ALL">Semua Status</option>
                     <option value="PENDING">Pending (Baru)</option>

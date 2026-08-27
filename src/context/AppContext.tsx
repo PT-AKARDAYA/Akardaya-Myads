@@ -68,6 +68,7 @@ interface AppContextType {
   submitReview: (review: Omit<Testimonial, 'id' | 'date' | 'avatarBgColor' | 'verified'>) => Promise<boolean>;
   submitOrder: (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
   resetToDefaults: () => Promise<boolean>;
+  refreshData: (silent?: boolean) => Promise<void>;
   notificationToast: { message: string; type: 'info' | 'success' | 'warning' } | null;
   showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error' | 'SUCCESS' | 'INFO' | 'WARNING' | 'ERROR') => void;
   dismissToast: () => void;
@@ -140,7 +141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       // 1. Check Google Spreadsheet first if URL is configured
       const savedStorageUrl = typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null;
-      const spreadsheetUrl = data.companyConfig?.spreadsheetUrl || savedStorageUrl;
+      const spreadsheetUrl = data.companyConfig?.spreadsheetUrl || savedStorageUrl || PERMANENT_GAS_URL;
 
       if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
         try {
@@ -155,15 +156,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const remoteData = safeNormalizeData(sheetJson.data);
               const remoteTimestamp = remoteData.lastUpdated || sheetJson.timestamp || '';
               
-              // Only update state if data timestamp changed or initial sync
-              if (!lastSyncTimestampRef.current || remoteTimestamp !== lastSyncTimestampRef.current) {
+              // Check if order list changed or total updated
+              const currentOrders = data.orders || [];
+              const remoteOrders = remoteData.orders || [];
+              const ordersCountChanged = currentOrders.length !== remoteOrders.length;
+              const firstOrderIdChanged = (currentOrders[0]?.id || '') !== (remoteOrders[0]?.id || '');
+              const timestampChanged = !lastSyncTimestampRef.current || (remoteTimestamp && remoteTimestamp !== lastSyncTimestampRef.current);
+
+              if (ordersCountChanged || firstOrderIdChanged || timestampChanged) {
+                if (remoteOrders.length > currentOrders.length && !silent) {
+                  showToast(`🛒 ${remoteOrders.length - currentOrders.length} Pesanan baru terdeteksi dari Google Sheet!`, 'success');
+                } else if (!silent) {
+                  showToast('✨ Data terbaru dari Google Spreadsheet berhasil dimuat', 'info');
+                }
+                
                 lastSyncTimestampRef.current = remoteTimestamp;
                 setData(remoteData);
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('akardaya_app_data', JSON.stringify(remoteData));
-                }
-                if (!silent) {
-                  showToast('✨ Data terbaru dari Google Spreadsheet berhasil dimuat', 'info');
                 }
               }
               setIsLoading(false);
@@ -183,7 +193,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const json = await res.json();
           if (json && json.packages) {
             const remoteData = safeNormalizeData(json);
-            if (!lastSyncTimestampRef.current || remoteData.lastUpdated !== lastSyncTimestampRef.current) {
+            const currentOrders = data.orders || [];
+            const remoteOrders = remoteData.orders || [];
+            const ordersChanged = currentOrders.length !== remoteOrders.length || (currentOrders[0]?.id || '') !== (remoteOrders[0]?.id || '');
+            
+            if (!lastSyncTimestampRef.current || remoteData.lastUpdated !== lastSyncTimestampRef.current || ordersChanged) {
               lastSyncTimestampRef.current = remoteData.lastUpdated || '';
               setData(remoteData);
               if (typeof window !== 'undefined') {
@@ -199,7 +213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsLoading(false);
       isSyncingRef.current = false;
     }
-  }, [data.companyConfig?.spreadsheetUrl, showToast]);
+  }, [data.companyConfig?.spreadsheetUrl, data.orders, showToast]);
 
   // Fetch initial data via REST fallback and localStorage
   const fetchInitialData = useCallback(async () => {
@@ -234,14 +248,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedVisits = parseInt(localStorage.getItem('akardaya_total_visits') || '12', 10);
       const newVisits = storedVisits + 1;
       localStorage.setItem('akardaya_total_visits', newVisits.toString());
-      // Random realistic active visitors (e.g., 3-8 active visitors)
       const baseActive = Math.floor(Math.random() * 4) + 3;
       setActiveUsers(baseActive);
     } catch (e) {
       setActiveUsers(3);
     }
 
-    // If hosting on GitHub Pages, we can immediately mark as active static mode
     const isStaticHost = window.location.hostname.includes('github.io');
     if (isStaticHost) {
       setIsConnected(true);
@@ -265,18 +277,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const msg: WebSocketMessage = JSON.parse(event.data);
           if (msg.type === 'INIT_DATA' || msg.type === 'SYNC_DATA') {
             const normalized = safeNormalizeData(msg.payload);
+            lastSyncTimestampRef.current = normalized.lastUpdated || '';
             setData(normalized);
             localStorage.setItem('akardaya_app_data', JSON.stringify(normalized));
             setIsLoading(false);
             if (msg.type === 'SYNC_DATA') {
-              showToast('✨ Data diperbarui secara real-time dari server', 'info');
+              showToast('✨ Data disinkronkan secara real-time dari server', 'info');
             }
           } else if (msg.type === 'ACTIVE_USERS') {
             setActiveUsers(msg.payload?.count || 1);
           } else if (msg.type === 'NEW_REVIEW') {
             showToast(`⭐ Ulasan baru dari ${msg.payload?.name || 'Pelanggan'}!`, 'success');
-          } else if (msg.type === 'NEW_ORDER') {
-            showToast(`🛒 Permintaan baru dari ${msg.payload?.customerName || 'Klien'}!`, 'info');
+          } else if (msg.type === 'NEW_ORDER' && msg.payload) {
+            const newOrder: OrderLead = msg.payload;
+            setData((prev) => {
+              const currentOrders = prev.orders || [];
+              if (currentOrders.some((o) => o.id === newOrder.id)) return prev;
+              const nextOrders = [newOrder, ...currentOrders];
+              const nextData = safeNormalizeData({ ...prev, orders: nextOrders, lastUpdated: new Date().toISOString() });
+              localStorage.setItem('akardaya_app_data', JSON.stringify(nextData));
+              return nextData;
+            });
+            showToast(`🛒 Pesanan baru masuk dari ${newOrder.customerName || 'Klien'}!`, 'success');
           }
         } catch (err) {
           console.error('Error handling WS message:', err);
@@ -284,7 +306,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       ws.onclose = () => {
-        // In static environment or if WS closes, remain connected in static mode
         setIsConnected(true);
       };
 
@@ -315,7 +336,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const updated = safeNormalizeData(event.data.payload);
             lastSyncTimestampRef.current = updated.lastUpdated || '';
             setData(updated);
-            showToast('🔄 Tampilan otomatis diperbarui mengikuti perubahan admin', 'info');
+          } else if (event.data && event.data.type === 'NEW_ORDER' && event.data.payload) {
+            const newOrder: OrderLead = event.data.payload;
+            setData((prev) => {
+              const currentOrders = prev.orders || [];
+              if (currentOrders.some((o) => o.id === newOrder.id)) return prev;
+              const nextOrders = [newOrder, ...currentOrders];
+              const nextData = safeNormalizeData({ ...prev, orders: nextOrders, lastUpdated: new Date().toISOString() });
+              localStorage.setItem('akardaya_app_data', JSON.stringify(nextData));
+              return nextData;
+            });
+            showToast(`🔔 Pesanan baru masuk dari ${newOrder.customerName || 'Klien'}!`, 'success');
           }
         };
       }
@@ -351,12 +382,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 4. Background polling timer (Every 20 seconds) to fetch spreadsheet updates across all users
+    // 4. Background polling timer (Every 8 seconds) to fetch spreadsheet updates across all users
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         syncLatestData(true);
       }
-    }, 20000);
+    }, 8000);
 
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -526,16 +557,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'PENDING',
     };
 
-    // Update locally
+    // 1. Update locally
     const updatedOrders = [newOrder, ...(data.orders || [])];
-    const merged = safeNormalizeData({ ...data, orders: updatedOrders });
+    const merged = safeNormalizeData({ 
+      ...data, 
+      orders: updatedOrders,
+      lastUpdated: new Date().toISOString()
+    });
+    lastSyncTimestampRef.current = merged.lastUpdated;
     setData(merged);
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('akardaya_app_data', JSON.stringify(merged));
+
+      // Broadcast to other open tabs in real-time (0ms)
+      try {
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.postMessage({
+            type: 'NEW_ORDER',
+            payload: newOrder,
+          });
+          broadcastChannelRef.current.postMessage({
+            type: 'DATA_UPDATED',
+            payload: merged,
+          });
+        }
+      } catch (e) {
+        console.warn('Broadcast error:', e);
+      }
     }
 
-    // Sync lead to Google Spreadsheet
-    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    // 2. Send via WebSocket if connected
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: 'UPDATE_DATA',
+          payload: merged,
+        }));
+      } catch (e) {
+        console.warn('WS send error:', e);
+      }
+    }
+
+    // 3. Sync lead to Google Spreadsheet (PESANAN_LEADS sheet)
+    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null) || PERMANENT_GAS_URL;
     if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
       try {
         await fetch(spreadsheetUrl, {
@@ -550,6 +615,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               phone: newOrder.whatsapp,
               packageName: newOrder.selectedPackageName,
               channel: newOrder.estimatedBudget,
+              businessName: newOrder.businessName || '',
+              targetCityOrArea: newOrder.targetCityOrArea || '',
               status: 'PENDING',
               notes: newOrder.notes || '',
             },
@@ -560,11 +627,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    // 4. Send to server API if available
     try {
       await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order),
+        body: JSON.stringify(newOrder),
       });
     } catch (err) {
       // Ignore static network errors
@@ -616,6 +684,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitReview,
         submitOrder,
         resetToDefaults,
+        refreshData: syncLatestData,
         notificationToast,
         showToast,
         dismissToast,
