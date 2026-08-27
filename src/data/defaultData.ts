@@ -477,6 +477,7 @@ export const INITIAL_APP_DATA: AppData = {
     operatingHours: 'Senin - Sabtu ( 08.00 - 16.00 )',
     announcementText: '🎉 Diskon Spesial Top-Up 3% & Gratis Pembuatan Website 3 Bulan untuk Paket Pilihan! Konsultasikan kebutuhan iklan bisnis Anda sekarang.',
     showAnnouncement: true,
+    spreadsheetUrl: 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec',
   },
   testimonials: DEFAULT_TESTIMONIALS,
   orders: [],

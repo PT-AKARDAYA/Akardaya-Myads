@@ -3,7 +3,6 @@ import { useApp } from './context/AppContext';
 import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation } from './types';
 import { AkarDayaLogo } from './components/AkarDayaLogo';
 import { VisitorAnalyticsDashboard } from './components/VisitorAnalyticsDashboard';
-import { SpreadsheetSyncConfig } from './components/SpreadsheetSyncConfig';
 import {
   ShieldCheck,
   Layers,
@@ -39,7 +38,6 @@ import {
   BarChart3,
   Users,
   Activity,
-  FileSpreadsheet,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -57,7 +55,7 @@ export const AdminApp: React.FC = () => {
 
   // Local editable draft
   const [draftData, setDraftData] = useState<AppData>(data);
-  const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'SPREADSHEET' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
+  const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
@@ -507,23 +505,6 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('SPREADSHEET')}
-              className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
-                activeTab === 'SPREADSHEET'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-500" />
-              <div className="flex-1">
-                <span>Database Spreadsheet</span>
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-400/20 text-emerald-600 dark:text-emerald-300 text-[9px] font-bold">
-                  Auto-Sync
-                </span>
-              </div>
-            </button>
-
-            <button
               onClick={() => setActiveTab('PACKAGES')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'PACKAGES'
@@ -676,18 +657,6 @@ export const AdminApp: React.FC = () => {
           {/* TAB 0: ANALYTICS */}
           {activeTab === 'ANALYTICS' && (
             <VisitorAnalyticsDashboard />
-          )}
-
-          {/* TAB 0.5: SPREADSHEET SYNC */}
-          {activeTab === 'SPREADSHEET' && (
-            <SpreadsheetSyncConfig
-              companyConfig={draftData.companyConfig}
-              onChange={(updatedCompanyConfig) =>
-                setDraftData({ ...draftData, companyConfig: updatedCompanyConfig })
-              }
-              onSave={handleSaveAll}
-              isSaving={isSaving}
-            />
           )}
 
           {/* TAB 1: PACKAGES */}

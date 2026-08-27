@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation } from '../types';
 import { VisitorAnalyticsDashboard } from './VisitorAnalyticsDashboard';
-import { SpreadsheetSyncConfig } from './SpreadsheetSyncConfig';
 import {
   X,
   Save,
@@ -30,7 +29,6 @@ import {
   Navigation,
   Compass,
   BarChart3,
-  FileSpreadsheet,
 } from 'lucide-react';
 
 export const AdminDashboardModal: React.FC = () => {
@@ -38,7 +36,7 @@ export const AdminDashboardModal: React.FC = () => {
   
   // Local editable draft of AppData
   const [draftData, setDraftData] = useState<AppData>(data);
-  const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'SPREADSHEET' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
+  const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'PACKAGES' | 'DISCOUNT' | 'RATES' | 'CONTACT' | 'OFFICES' | 'TESTIMONIALS' | 'LEADS'>('ANALYTICS');
   const [isSaving, setIsSaving] = useState(false);
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
@@ -264,18 +262,6 @@ export const AdminDashboardModal: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('SPREADSHEET')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              activeTab === 'SPREADSHEET'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Database Spreadsheet (Auto-Sync)</span>
-          </button>
-
-          <button
             onClick={() => setActiveTab('PACKAGES')}
             className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
               activeTab === 'PACKAGES'
@@ -365,18 +351,6 @@ export const AdminDashboardModal: React.FC = () => {
           {/* TAB 0: ANALYTICS */}
           {activeTab === 'ANALYTICS' && (
             <VisitorAnalyticsDashboard />
-          )}
-
-          {/* TAB 0.5: SPREADSHEET SYNC */}
-          {activeTab === 'SPREADSHEET' && (
-            <SpreadsheetSyncConfig
-              companyConfig={draftData.companyConfig}
-              onChange={(updatedCompanyConfig) =>
-                setDraftData({ ...draftData, companyConfig: updatedCompanyConfig })
-              }
-              onSave={handleSaveAll}
-              isSaving={isSaving}
-            />
           )}
 
           {/* TAB 1: PACKAGES MANAGEMENT */}

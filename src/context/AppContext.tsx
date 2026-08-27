@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfig, Testimonial, OrderLead, WebSocketMessage } from '../types';
 import { INITIAL_APP_DATA, DEFAULT_OFFICE_LOCATIONS, DEFAULT_PACKAGES, DEFAULT_CHANNEL_RATES, DEFAULT_TESTIMONIALS } from '../data/defaultData';
 
+export const PERMANENT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec';
+
 export const safeNormalizeData = (incoming: any): AppData => {
   if (!incoming || typeof incoming !== 'object') {
     return INITIAL_APP_DATA;
@@ -23,6 +25,7 @@ export const safeNormalizeData = (incoming: any): AppData => {
   const safeCompanyConfig: CompanyConfig = {
     ...INITIAL_APP_DATA.companyConfig,
     ...(incoming.companyConfig && typeof incoming.companyConfig === 'object' ? incoming.companyConfig : {}),
+    spreadsheetUrl: PERMANENT_GAS_URL,
   };
 
   const safeOffices = Array.isArray(incoming.offices) && incoming.offices.length > 0
