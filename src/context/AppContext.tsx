@@ -1,12 +1,51 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfig, Testimonial, OrderLead, WebSocketMessage } from '../types';
-import { INITIAL_APP_DATA, DEFAULT_OFFICE_LOCATIONS } from '../data/defaultData';
+import { INITIAL_APP_DATA, DEFAULT_OFFICE_LOCATIONS, DEFAULT_PACKAGES, DEFAULT_CHANNEL_RATES, DEFAULT_TESTIMONIALS } from '../data/defaultData';
 
-const safeNormalizeData = (incoming: AppData): AppData => ({
-  ...INITIAL_APP_DATA,
-  ...incoming,
-  offices: Array.isArray(incoming.offices) && incoming.offices.length > 0 ? incoming.offices : DEFAULT_OFFICE_LOCATIONS,
-});
+export const safeNormalizeData = (incoming: any): AppData => {
+  if (!incoming || typeof incoming !== 'object') {
+    return INITIAL_APP_DATA;
+  }
+
+  const safePackages = Array.isArray(incoming.packages) && incoming.packages.length > 0
+    ? incoming.packages
+    : DEFAULT_PACKAGES;
+
+  const safeChannelRates = Array.isArray(incoming.channelRates) && incoming.channelRates.length > 0
+    ? incoming.channelRates
+    : DEFAULT_CHANNEL_RATES;
+
+  const safeDiscountConfig: DiscountConfig = {
+    ...INITIAL_APP_DATA.discountConfig,
+    ...(incoming.discountConfig && typeof incoming.discountConfig === 'object' ? incoming.discountConfig : {}),
+  };
+
+  const safeCompanyConfig: CompanyConfig = {
+    ...INITIAL_APP_DATA.companyConfig,
+    ...(incoming.companyConfig && typeof incoming.companyConfig === 'object' ? incoming.companyConfig : {}),
+  };
+
+  const safeOffices = Array.isArray(incoming.offices) && incoming.offices.length > 0
+    ? incoming.offices
+    : DEFAULT_OFFICE_LOCATIONS;
+
+  const safeTestimonials = Array.isArray(incoming.testimonials) && incoming.testimonials.length > 0
+    ? incoming.testimonials
+    : DEFAULT_TESTIMONIALS;
+
+  const safeOrders = Array.isArray(incoming.orders) ? incoming.orders : [];
+
+  return {
+    packages: safePackages,
+    channelRates: safeChannelRates,
+    discountConfig: safeDiscountConfig,
+    companyConfig: safeCompanyConfig,
+    testimonials: safeTestimonials,
+    orders: safeOrders,
+    offices: safeOffices,
+    lastUpdated: incoming.lastUpdated || new Date().toISOString(),
+  };
+};
 
 interface AppContextType {
   data: AppData;
@@ -14,6 +53,7 @@ interface AppContextType {
   isConnected: boolean;
   activeUsers: number;
   darkMode: boolean;
+  isDarkMode: boolean;
   toggleDarkMode: () => void;
   isAdminOpen: boolean;
   setIsAdminOpen: (open: boolean) => void;
@@ -26,6 +66,7 @@ interface AppContextType {
   submitOrder: (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
   resetToDefaults: () => Promise<boolean>;
   notificationToast: { message: string; type: 'info' | 'success' | 'warning' } | null;
+  showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error' | 'SUCCESS' | 'INFO' | 'WARNING' | 'ERROR') => void;
   dismissToast: () => void;
 }
 
@@ -54,7 +95,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showToast = useCallback((message: string, type: 'info' | 'success' | 'warning' = 'info') => {
+  const showToast = useCallback((message: string, rawType: string = 'info') => {
+    const lower = rawType.toLowerCase();
+    const type: 'info' | 'success' | 'warning' =
+      lower === 'success' ? 'success' : lower === 'warning' || lower === 'error' ? 'warning' : 'info';
     setNotificationToast({ message, type });
     setTimeout(() => {
       setNotificationToast((prev) => (prev?.message === message ? null : prev));
@@ -428,6 +472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isConnected,
         activeUsers,
         darkMode,
+        isDarkMode: darkMode,
         toggleDarkMode,
         isAdminOpen,
         setIsAdminOpen,
@@ -440,6 +485,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitOrder,
         resetToDefaults,
         notificationToast,
+        showToast,
         dismissToast,
       }}
     >
