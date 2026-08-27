@@ -176,6 +176,31 @@ export function trackRealVisitor(
       // ignore
     }
 
+    // Send to Google Sheets Webhook if configured
+    try {
+      const savedSpreadsheetUrl = localStorage.getItem('akardaya_spreadsheet_url');
+      if (savedSpreadsheetUrl && savedSpreadsheetUrl.startsWith('http')) {
+        fetch(savedSpreadsheetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'track_visitor',
+            visitorId,
+            timestamp: new Date().toISOString(),
+            page,
+            device,
+            browser,
+            referrer,
+            eventType,
+            screen,
+          }),
+        }).catch(() => {});
+      }
+    } catch {
+      // ignore sheet webhook error
+    }
+
     // Send to server backend
     try {
       fetch('/api/analytics/track', {

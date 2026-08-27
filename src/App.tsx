@@ -17,21 +17,6 @@ import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
 
 const MainLayout: React.FC = () => {
-  const { isLoading } = useApp();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs font-semibold tracking-wider uppercase text-slate-500">
-            Menghubungkan ke Server Iklan...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-500 selection:text-white">
       {/* Toast Notification Container */}

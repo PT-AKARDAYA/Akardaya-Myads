@@ -485,6 +485,98 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 4. GOOGLE SHEETS APPS SCRIPT CODE & INSTRUCTIONS FOR MULTI-DEVICE TRACKING */}
+      <div className="p-6 rounded-2xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-sm">
+              GS
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                Panduan Pelacak Pengunjung Lintas HP via Google Sheets
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                  Sangat Praktis & Tanpa Server
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Gunakan kode Google Apps Script di bawah ini agar seluruh HP/Laptop pengunjung otomatis mencatat hits ke Google Sheet Anda!
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              const code = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Handle Visitor Tracking
+    if (data.action === "track_visitor") {
+      var sheet = ss.getSheetByName("Analytics_Logs") || ss.insertSheet("Analytics_Logs");
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(["Timestamp", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type"]);
+      }
+      sheet.appendRow([
+        data.timestamp || new Date().toISOString(),
+        data.visitorId || "unknown",
+        data.page || "/",
+        data.device || "Mobile",
+        data.browser || "Browser",
+        data.referrer || "Direct",
+        data.eventType || "pageview"
+      ]);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle Order Submissions
+    var orderSheet = ss.getSheetByName("Orders") || ss.getSheets()[0];
+    orderSheet.appendRow([new Date(), data.id, data.fullName, data.phone, data.packageName, data.totalPrice, data.status]);
+    return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+              navigator.clipboard.writeText(code);
+              alert('Kode Google Apps Script berhasil disalin ke clipboard!');
+            }}
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+          >
+            Salin Script Google Sheet
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-300">
+          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+            <div className="font-bold text-emerald-400 flex items-center gap-1.5">
+              <span>1. Extensions &gt; Apps Script</span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Buka Google Sheet webhook Anda, klik menu <strong>Extensions &gt; Apps Script</strong>.
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+            <div className="font-bold text-emerald-400 flex items-center gap-1.5">
+              <span>2. Paste & Deploy Web App</span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Ganti isi fungsi <code>doPost(e)</code> dengan script yang disalin di atas, lalu klik <strong>Deploy &gt; New Deployment</strong> (Access: Anyone).
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+            <div className="font-bold text-emerald-400 flex items-center gap-1.5">
+              <span>3. Otomatis Lintas HP</span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Setiap kali HP siapapun mengakses web ini, data otomatis masuk ke tab <code>Analytics_Logs</code> di Google Sheet Anda!
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

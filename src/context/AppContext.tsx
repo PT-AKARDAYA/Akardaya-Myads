@@ -77,9 +77,27 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [data, setData] = useState<AppData>(INITIAL_APP_DATA);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  // Synchronously initialize with cached localStorage data or INITIAL_APP_DATA for instant 0ms first render
+  const [data, setData] = useState<AppData>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('akardaya_app_data');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.packages && Array.isArray(parsed.packages)) {
+            return safeNormalizeData(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading localStorage cache:', e);
+      }
+    }
+    return INITIAL_APP_DATA;
+  });
+
+  // Always initialize isLoading as false so all menus & UI render immediately
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = useState<boolean>(true);
   const [activeUsers, setActiveUsers] = useState<number>(1);
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState<boolean>(false);
@@ -153,7 +171,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? `${spreadsheetUrl}&action=GET_DATA&_t=${Date.now()}` 
             : `${spreadsheetUrl}?action=GET_DATA&_t=${Date.now()}`;
           
-          const sheetRes = await fetch(fetchUrl);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const sheetRes = await fetch(fetchUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
           if (sheetRes.ok) {
             const sheetJson = await sheetRes.json();
             if (sheetJson && sheetJson.status === 'success' && sheetJson.data && sheetJson.data.packages) {
@@ -189,7 +210,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 2. Server API fallback for fullstack mode
       try {
-        const res = await fetch(`/api/data?_t=${Date.now()}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(`/api/data?_t=${Date.now()}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (res.ok) {
           const json = await res.json();
           if (json && json.packages) {
@@ -339,8 +363,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   connectWebSocketRef.current = connectWebSocket;
 
   useEffect(() => {
-    fetchInitialDataRef.current();
-    connectWebSocketRef.current();
+    // Schedule background data refresh after initial paint
+    const timer = setTimeout(() => {
+      fetchInitialDataRef.current();
+      connectWebSocketRef.current();
+    }, 50);
 
     // 1. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
     try {
@@ -414,6 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 10000);
 
     return () => {
+      clearTimeout(timer);
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
