@@ -397,7 +397,7 @@ export const AdminApp: React.FC = () => {
                       ></span>
                     </span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                      {isConnected ? 'Server Sinkronisasi Aktif' : 'Menghubungkan...'}
+                      {isConnected ? 'Sistem Aktif & Terhubung' : 'Menghubungkan...'}
                     </span>
                   </span>
                   <span>•</span>
