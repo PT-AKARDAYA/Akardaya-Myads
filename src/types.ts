@@ -83,6 +83,7 @@ export interface OrderLead {
   notes?: string;
   createdAt: string;
   status: 'PENDING' | 'CONTACTED' | 'ACTIVE' | 'COMPLETED';
+  isRead?: boolean;
 }
 
 export interface OfficeLocation {

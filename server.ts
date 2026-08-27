@@ -119,6 +119,67 @@ async function startServer() {
     res.json({ status: 'ok', activeClients: clients.size, lastUpdated: appData.lastUpdated });
   });
 
+  // Analytics in-memory store
+  interface ServerVisitorLog {
+    id: string;
+    visitorId?: string;
+    timestamp: string;
+    ip: string;
+    page: string;
+    device: string;
+    browser: string;
+    referrer: string;
+    eventType?: string;
+  }
+  const serverVisitorLogs: ServerVisitorLog[] = [];
+
+  app.post('/api/analytics/track', (req, res) => {
+    try {
+      const body = req.body || {};
+      const ipHeader = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+      const ip = ipHeader.split(',')[0].trim();
+      const log: ServerVisitorLog = {
+        id: 'vis_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        visitorId: body.visitorId || 'v_' + Math.random().toString(36).substring(2, 6),
+        timestamp: new Date().toISOString(),
+        ip,
+        page: body.page || '/',
+        device: body.device || 'Desktop',
+        browser: body.browser || 'Web Browser',
+        referrer: body.referrer || 'Langsung',
+        eventType: body.eventType || 'pageview',
+      };
+
+      serverVisitorLogs.unshift(log);
+      if (serverVisitorLogs.length > 1000) {
+        serverVisitorLogs.pop();
+      }
+
+      res.json({ status: 'success', totalLogged: serverVisitorLogs.length, activeClients: clients.size });
+    } catch (e: any) {
+      res.status(500).json({ status: 'error', message: e.message });
+    }
+  });
+
+  app.get('/api/analytics/stats', (req, res) => {
+    try {
+      const totalViews = serverVisitorLogs.length;
+      const uniqueVisitors = new Set(serverVisitorLogs.map((l) => l.visitorId || l.ip)).size;
+
+      res.json({
+        status: 'success',
+        data: {
+          totalPageViews: totalViews,
+          uniqueVisitors: uniqueVisitors || (totalViews > 0 ? 1 : 0),
+          activeNow: Math.max(1, clients.size),
+          logs: serverVisitorLogs.slice(0, 50),
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ status: 'error', message: e.message });
+    }
+  });
+
   // Get full app state
   app.get('/api/data', (req, res) => {
     res.json(appData);

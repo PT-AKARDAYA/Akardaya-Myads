@@ -61,8 +61,40 @@ export const AdminApp: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshingLeads, setIsRefreshingLeads] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
+  const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'UNREAD' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
+
+  // Read orders tracking for badge count
+  const [readOrderIds, setReadOrderIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('akardaya_read_order_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Calculate unread orders count (only pending orders that have not been read/opened)
+  const unreadOrdersCount = React.useMemo(() => {
+    return (draftData.orders || []).filter(
+      (o) => !readOrderIds.includes(o.id) && o.status === 'PENDING' && !o.isRead
+    ).length;
+  }, [draftData.orders, readOrderIds]);
+
+  // Mark all current orders as read when admin opens the LEADS tab
+  useEffect(() => {
+    if (activeTab === 'LEADS' && draftData.orders && draftData.orders.length > 0) {
+      const allIds = draftData.orders.map((o) => o.id);
+      setReadOrderIds((prev) => {
+        const next = Array.from(new Set([...prev, ...allIds]));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('akardaya_read_order_ids', JSON.stringify(next));
+        }
+        return next;
+      });
+    }
+  }, [activeTab, draftData.orders]);
 
   // Simple optional PIN lock to prevent accidental edits
   const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
@@ -330,8 +362,10 @@ export const AdminApp: React.FC = () => {
       (o.businessName && o.businessName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       o.selectedPackageName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    if (leadStatusFilter === 'ALL') return matchesSearch;
-    return matchesSearch && o.status === leadStatusFilter;
+    if (!matchesSearch) return false;
+    if (leadStatusFilter === 'ALL') return true;
+    if (leadStatusFilter === 'UNREAD') return !readOrderIds.includes(o.id) && o.status === 'PENDING';
+    return o.status === leadStatusFilter;
   });
 
   // Render Lock Screen if not unlocked
@@ -640,11 +674,16 @@ export const AdminApp: React.FC = () => {
               }`}
             >
               <Inbox className="w-4 h-4 shrink-0" />
-              <div className="flex-1">
-                <span>Pesanan Masuk</span>
-                {(draftData.orders?.length || 0) > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold">
-                    {draftData.orders?.length}
+              <div className="flex-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  Pesanan Masuk
+                  <span className="hidden md:inline-block opacity-70 text-[10px]">
+                    ({(draftData.orders || []).length})
+                  </span>
+                </span>
+                {unreadOrdersCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold animate-pulse shadow-xs">
+                    {unreadOrdersCount} baru
                   </span>
                 )}
               </div>
@@ -1443,7 +1482,21 @@ export const AdminApp: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {unreadOrdersCount > 0 && (
+                    <button
+                      onClick={() => {
+                        const allIds = (draftData.orders || []).map((o) => o.id);
+                        setReadOrderIds(allIds);
+                        localStorage.setItem('akardaya_read_order_ids', JSON.stringify(allIds));
+                        showToast('Semua pesanan ditandai sudah dibaca', 'INFO');
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition-colors"
+                    >
+                      Tandai Sudah Dibaca
+                    </button>
+                  )}
+
                   <button
                     onClick={handleManualRefreshLeads}
                     disabled={isRefreshingLeads}
@@ -1459,7 +1512,8 @@ export const AdminApp: React.FC = () => {
                     onChange={(e: any) => setLeadStatusFilter(e.target.value)}
                     className="px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium cursor-pointer"
                   >
-                    <option value="ALL">Semua Status</option>
+                    <option value="ALL">Semua Status ({(draftData.orders || []).length})</option>
+                    <option value="UNREAD">Belum Dibaca ({unreadOrdersCount})</option>
                     <option value="PENDING">Pending (Baru)</option>
                     <option value="CONTACTED">Telah Dihubungi</option>
                     <option value="COMPLETED">Selesai (Deal)</option>

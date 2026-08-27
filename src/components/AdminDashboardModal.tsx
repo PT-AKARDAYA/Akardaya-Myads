@@ -59,6 +59,38 @@ export const AdminDashboardModal: React.FC = () => {
     refreshDataRef.current = refreshData;
   }, [refreshData]);
 
+  // Read orders tracking for badge count
+  const [readOrderIds, setReadOrderIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('akardaya_read_order_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Calculate unread orders count
+  const unreadOrdersCount = React.useMemo(() => {
+    return (draftData.orders || []).filter(
+      (o) => !readOrderIds.includes(o.id) && o.status === 'PENDING' && !o.isRead
+    ).length;
+  }, [draftData.orders, readOrderIds]);
+
+  // Mark all current orders as read when modal opens on LEADS tab or user switches to LEADS
+  useEffect(() => {
+    if (isAdminOpen && activeTab === 'LEADS' && draftData.orders && draftData.orders.length > 0) {
+      const allIds = draftData.orders.map((o) => o.id);
+      setReadOrderIds((prev) => {
+        const next = Array.from(new Set([...prev, ...allIds]));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('akardaya_read_order_ids', JSON.stringify(next));
+        }
+        return next;
+      });
+    }
+  }, [isAdminOpen, activeTab, draftData.orders]);
+
   useEffect(() => {
     if (isAdminOpen && activeTab === 'LEADS') {
       refreshDataRef.current(true);
@@ -376,7 +408,15 @@ export const AdminDashboardModal: React.FC = () => {
             }`}
           >
             <Inbox className="w-3.5 h-3.5" />
-            <span>Pesanan Masuk ({draftData.orders?.length || 0})</span>
+            <span>Pesanan Masuk</span>
+            <span className="opacity-75 text-[10px]">
+              ({(draftData.orders || []).length})
+            </span>
+            {unreadOrdersCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold animate-pulse shadow-xs">
+                {unreadOrdersCount} baru
+              </span>
+            )}
           </button>
         </div>
 
@@ -1135,15 +1175,31 @@ export const AdminDashboardModal: React.FC = () => {
                   </p>
                 </div>
 
-                <button
-                  onClick={handleManualRefreshLeads}
-                  disabled={isRefreshingLeads}
-                  className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer disabled:opacity-60"
-                  title="Periksa pesanan baru sekarang"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isRefreshingLeads ? 'animate-spin' : ''}`} />
-                  <span>{isRefreshingLeads ? 'Menyinkronkan...' : 'Segarkan'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {unreadOrdersCount > 0 && (
+                    <button
+                      onClick={() => {
+                        const allIds = (draftData.orders || []).map((o) => o.id);
+                        setReadOrderIds(allIds);
+                        localStorage.setItem('akardaya_read_order_ids', JSON.stringify(allIds));
+                        showToast('Semua pesanan ditandai sudah dibaca', 'success');
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition-colors"
+                    >
+                      Tandai Sudah Dibaca
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleManualRefreshLeads}
+                    disabled={isRefreshingLeads}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer disabled:opacity-60"
+                    title="Periksa pesanan baru sekarang"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isRefreshingLeads ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshingLeads ? 'Menyinkronkan...' : 'Segarkan'}</span>
+                  </button>
+                </div>
               </div>
 
               {(!draftData.orders || draftData.orders.length === 0) ? (
