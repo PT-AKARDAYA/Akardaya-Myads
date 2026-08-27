@@ -93,7 +93,7 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const maxChartCount = Math.max(...dailyCounts.map((d) => d.count), 5);
 
   const handleManualPing = () => {
-    trackRealVisitor(window.location.pathname || '/', 'pageview');
+    trackRealVisitor(window.location.pathname || '/', 'pageview', data?.companyConfig?.spreadsheetUrl);
     refreshAnalyticsData();
   };
 
@@ -362,11 +362,18 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
                     </div>
 
                     <div className="text-[11px] font-semibold text-slate-400 shrink-0 mt-0.5">
-                      {new Date(log.timestamp).toLocaleTimeString('id-ID', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })}
+                      {log.timestamp && log.timestamp.includes('WIB')
+                        ? log.timestamp
+                        : !isNaN(new Date(log.timestamp).getTime())
+                        ? new Date(log.timestamp).toLocaleString('id-ID', {
+                            timeZone: 'Asia/Jakarta',
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          }) + ' WIB'
+                        : log.timestamp}
                     </div>
                   </div>
                 ))

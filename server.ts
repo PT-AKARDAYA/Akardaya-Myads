@@ -138,10 +138,28 @@ async function startServer() {
       const body = req.body || {};
       const ipHeader = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
       const ip = ipHeader.split(',')[0].trim();
+      
+      const jakartaTimestamp = (() => {
+        try {
+          return new Intl.DateTimeFormat('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          }).format(new Date()).replace(/\./g, ':') + ' WIB';
+        } catch {
+          return new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
+        }
+      })();
+
       const log: ServerVisitorLog = {
         id: 'vis_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         visitorId: body.visitorId || 'v_' + Math.random().toString(36).substring(2, 6),
-        timestamp: new Date().toISOString(),
+        timestamp: jakartaTimestamp,
         ip,
         page: body.page || '/',
         device: body.device || 'Desktop',
@@ -153,6 +171,28 @@ async function startServer() {
       serverVisitorLogs.unshift(log);
       if (serverVisitorLogs.length > 1000) {
         serverVisitorLogs.pop();
+      }
+
+      // Forward to Google Apps Script as dual-redundancy background sync
+      const gasUrl = appData?.companyConfig?.spreadsheetUrl;
+      if (gasUrl && gasUrl.startsWith('https://script.google.com/')) {
+        fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'track_visitor',
+            visitorId: log.visitorId,
+            timestamp: log.timestamp,
+            page: log.page,
+            device: log.device,
+            browser: log.browser,
+            referrer: log.referrer,
+            eventType: log.eventType,
+            screen: body.screen || 'Unknown',
+          }),
+        }).catch((err) => {
+          console.warn('Server GAS forward err:', err?.message);
+        });
       }
 
       res.json({ status: 'success', totalLogged: serverVisitorLogs.length, activeClients: clients.size });

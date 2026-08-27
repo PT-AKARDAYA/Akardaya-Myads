@@ -27,17 +27,13 @@ const FallbackLoader = () => (
 );
 
 const MainLayout: React.FC = () => {
-  const { config } = useApp();
+  const { data } = useApp();
 
   useEffect(() => {
     // Automatically track visitor when the app loads, passing the global spreadsheet URL
-    if (config?.companyConfig?.spreadsheetUrl) {
-      trackRealVisitor(window.location.pathname || '/', 'pageview', config.companyConfig.spreadsheetUrl);
-    } else {
-      // Fallback if config is not ready yet
-      trackRealVisitor(window.location.pathname || '/', 'pageview');
-    }
-  }, [config?.companyConfig?.spreadsheetUrl]);
+    const targetUrl = data?.companyConfig?.spreadsheetUrl;
+    trackRealVisitor(window.location.pathname || '/', 'pageview', targetUrl);
+  }, [data?.companyConfig?.spreadsheetUrl]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-500 selection:text-white">

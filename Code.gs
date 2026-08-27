@@ -175,6 +175,34 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Dukungan pelacakan via GET request
+    if (action === "track_visitor") {
+      const analyticsSheetName = "Analytics_Logs";
+      let sheet = ss.getSheetByName(analyticsSheetName);
+      if (!sheet) {
+        sheet = ss.insertSheet(analyticsSheetName);
+        sheet.appendRow(["Timestamp (WIB)", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"]);
+        sheet.setFrozenRows(1);
+        formatHeader(sheet, "#0F766E");
+      }
+      const p = e && e.parameter ? e.parameter : {};
+      const jakartaTimestamp = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss") + " WIB";
+      sheet.appendRow([
+        jakartaTimestamp,
+        p.visitorId || "unknown",
+        p.page || "/",
+        p.device || "Unknown",
+        p.browser || "Unknown",
+        p.referrer || "Direct",
+        p.eventType || "pageview",
+        p.screen || "Unknown"
+      ]);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Visitor tracked via GET successfully"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
       message: "Action tidak dikenal"
@@ -198,7 +226,14 @@ function doPost(e) {
   try {
     let requestBody = {};
     if (e && e.postData && e.postData.contents) {
-      requestBody = JSON.parse(e.postData.contents);
+      try {
+        requestBody = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        requestBody = {};
+      }
+    }
+    if (e && e.parameter) {
+      requestBody = Object.assign({}, e.parameter, requestBody);
     }
 
     const action = requestBody.action || (e && e.parameter && e.parameter.action) || "SAVE_DATA";
@@ -271,13 +306,15 @@ function doPost(e) {
       
       if (!sheet) {
         sheet = ss.insertSheet(analyticsSheetName);
-        sheet.appendRow(["Timestamp", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"]);
+        sheet.appendRow(["Timestamp (WIB)", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"]);
         sheet.setFrozenRows(1);
         formatHeader(sheet, "#0F766E"); // Teal header
       }
       
+      const jakartaTimestamp = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss") + " WIB";
+      
       sheet.appendRow([
-        requestBody.timestamp || new Date().toISOString(),
+        jakartaTimestamp,
         requestBody.visitorId || "unknown",
         requestBody.page || "/",
         requestBody.device || "Unknown",

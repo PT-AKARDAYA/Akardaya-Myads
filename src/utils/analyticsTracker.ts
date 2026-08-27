@@ -30,6 +30,29 @@ export interface LocalAnalyticsSummary {
   logs: VisitorRecord[];
 }
 
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec';
+
+export function getJakartaTimestamp(): string {
+  try {
+    const d = new Date();
+    // Jakarta is UTC+7
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    };
+    const formatter = new Intl.DateTimeFormat('id-ID', options);
+    return formatter.format(d).replace(/\./g, ':') + ' WIB';
+  } catch {
+    return new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
+  }
+}
+
 const STORAGE_KEY = 'akardaya_visitor_logs';
 const VISITOR_ID_KEY = 'akardaya_unique_visitor_id';
 
@@ -135,10 +158,12 @@ export function trackRealVisitor(
     const referrer = document.referrer ? new URL(document.referrer).hostname : 'Langsung (Direct)';
     const language = navigator.language || 'id-ID';
 
+    const jakartaNow = getJakartaTimestamp();
+
     const record: VisitorRecord = {
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       visitorId,
-      timestamp: new Date().toISOString(),
+      timestamp: jakartaNow,
       page,
       device,
       browser,
@@ -181,24 +206,35 @@ export function trackRealVisitor(
 
     // Send to Google Sheets Webhook if configured
     try {
-      const activeSpreadsheetUrl = spreadsheetUrl || localStorage.getItem('akardaya_spreadsheet_url');
+      const activeSpreadsheetUrl = spreadsheetUrl || localStorage.getItem('akardaya_spreadsheet_url') || DEFAULT_GAS_URL;
       if (activeSpreadsheetUrl && activeSpreadsheetUrl.startsWith('http')) {
+        const payload = JSON.stringify({
+          action: 'track_visitor',
+          visitorId,
+          timestamp: jakartaNow,
+          page,
+          device,
+          browser,
+          referrer,
+          eventType,
+          screen,
+        });
+
+        // 1. Send via fetch POST
         fetch(activeSpreadsheetUrl, {
           method: 'POST',
           mode: 'no-cors', // Standard Google Apps Script way
-          headers: { 'Content-Type': 'text/plain' }, // Use text/plain to avoid CORS preflight blocking in GAS
-          body: JSON.stringify({
-            action: 'track_visitor',
-            visitorId,
-            timestamp: new Date().toISOString(),
-            page,
-            device,
-            browser,
-            referrer,
-            eventType,
-            screen,
-          }),
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: payload,
         }).catch(() => {});
+
+        // 2. Also try sendBeacon if available for robust background sync
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          try {
+            const blob = new Blob([payload], { type: 'text/plain;charset=utf-8' });
+            navigator.sendBeacon(activeSpreadsheetUrl, blob);
+          } catch (e) {}
+        }
       }
     } catch {
       // ignore sheet webhook error
