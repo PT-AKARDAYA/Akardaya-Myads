@@ -254,6 +254,35 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 4. Fitur Pelacakan Analitik Pengunjung (Lintas HP)
+    if (action === "track_visitor") {
+      const analyticsSheetName = "Analytics_Logs";
+      let sheet = ss.getSheetByName(analyticsSheetName);
+      
+      if (!sheet) {
+        sheet = ss.insertSheet(analyticsSheetName);
+        sheet.appendRow(["Timestamp", "Visitor ID", "Page", "Device", "Browser", "Referrer", "Event Type", "Screen Resolution"]);
+        sheet.setFrozenRows(1);
+        formatHeader(sheet, "#0F766E"); // Teal header
+      }
+      
+      sheet.appendRow([
+        requestBody.timestamp || new Date().toISOString(),
+        requestBody.visitorId || "unknown",
+        requestBody.page || "/",
+        requestBody.device || "Unknown",
+        requestBody.browser || "Unknown",
+        requestBody.referrer || "Direct",
+        requestBody.eventType || "pageview",
+        requestBody.screen || "Unknown"
+      ]);
+      
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        message: "Visitor tracked successfully" 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
       message: "Action tidak dikenal"
@@ -555,4 +584,15 @@ function saveAllSheets(ss, data) {
     ]);
     s.getRange(2, 1, testRows.length, testRows[0].length).setValues(testRows);
   }
+}
+
+/**
+ * =========================================================================
+ * CORS PREFLIGHT (OPTIONS)
+ * =========================================================================
+ * Mencegah error CORS ketika dipanggil secara fetch() dari browser.
+ */
+function doOptions(e) {
+  return ContentService.createTextOutput("OK")
+    .setMimeType(ContentService.MimeType.TEXT);
 }
