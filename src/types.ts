@@ -109,6 +109,7 @@ export interface AppData {
   testimonials: Testimonial[];
   orders: OrderLead[];
   offices?: OfficeLocation[];
+  analyticsLogs?: any[];
   lastUpdated: string;
 }
 

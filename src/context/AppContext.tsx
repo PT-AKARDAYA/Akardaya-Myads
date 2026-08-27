@@ -37,6 +37,7 @@ export const safeNormalizeData = (incoming: any): AppData => {
     : DEFAULT_TESTIMONIALS;
 
   const safeOrders = Array.isArray(incoming.orders) ? incoming.orders : [];
+  const safeAnalyticsLogs = Array.isArray(incoming.analyticsLogs) ? incoming.analyticsLogs : undefined;
 
   return {
     packages: safePackages,
@@ -46,6 +47,7 @@ export const safeNormalizeData = (incoming: any): AppData => {
     testimonials: safeTestimonials,
     orders: safeOrders,
     offices: safeOffices,
+    analyticsLogs: safeAnalyticsLogs,
     lastUpdated: incoming.lastUpdated || '2026-08-27T00:00:00.000Z',
   };
 };

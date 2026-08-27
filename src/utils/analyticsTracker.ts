@@ -263,6 +263,191 @@ export function trackRealVisitor(
 }
 
 /**
+ * Parses any timestamp string (WIB, ISO, Slash format) into clean date structures
+ */
+export function parseVisitorTimestamp(ts: string): { dateStr: string; labelStr: string } {
+  if (!ts) {
+    const now = new Date();
+    return {
+      dateStr: now.toISOString().split('T')[0],
+      labelStr: now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }),
+    };
+  }
+
+  // 1. Check YYYY-MM-DD pattern (e.g. "2026-08-27 20:30:15 WIB" or "2026-08-27T13:30:15")
+  const isoMatch = ts.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    const d = new Date(year, month, day);
+    const dateStr = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    const labelStr = !isNaN(d.getTime())
+      ? d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
+      : `${day} ${month + 1}`;
+    return { dateStr, labelStr };
+  }
+
+  // 2. Check DD/MM/YYYY pattern (e.g. "27/08/2026" or "27/08/2026 20:30:15")
+  const dmyMatch = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const d = new Date(year, month, day);
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const labelStr = !isNaN(d.getTime())
+      ? d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
+      : `${day}/${month + 1}`;
+    return { dateStr, labelStr };
+  }
+
+  // 3. Fallback standard parse
+  const d = new Date(ts);
+  if (!isNaN(d.getTime())) {
+    const dateStr = d.toISOString().split('T')[0];
+    const labelStr = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+    return { dateStr, labelStr };
+  }
+
+  const now = new Date();
+  return {
+    dateStr: now.toISOString().split('T')[0],
+    labelStr: now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }),
+  };
+}
+
+/**
+ * Calculates complete dashboard statistics from an array of VisitorRecord logs
+ * (works seamlessly for Google Spreadsheet rows, server logs, or local storage logs)
+ */
+export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalAnalyticsSummary {
+  if (!logs || logs.length === 0) {
+    return {
+      totalViews: 0,
+      uniqueVisitors: 0,
+      devicePercentages: { mobile: 0, desktop: 0, tablet: 0, mobileCount: 0, desktopCount: 0, tabletCount: 0 },
+      topPages: [],
+      topBrowsers: [],
+      dailyCounts: [],
+      logs: [],
+    };
+  }
+
+  const totalViews = logs.length;
+  const uniqueVisitorIds = new Set(logs.map((l) => l.visitorId || 'unknown'));
+  const uniqueVisitors = Math.max(1, uniqueVisitorIds.size);
+
+  // Device breakdown calculation
+  let mobileCount = 0;
+  let desktopCount = 0;
+  let tabletCount = 0;
+
+  logs.forEach((l) => {
+    const dev = (l.device || '').toLowerCase();
+    if (dev.includes('mob') || dev.includes('hp') || dev.includes('phone') || dev.includes('android') || dev.includes('iphone')) {
+      mobileCount++;
+    } else if (dev.includes('tab') || dev.includes('ipad')) {
+      tabletCount++;
+    } else {
+      desktopCount++;
+    }
+  });
+
+  const totalDev = Math.max(1, mobileCount + desktopCount + tabletCount);
+  const devicePercentages = {
+    mobile: Math.round((mobileCount / totalDev) * 100),
+    desktop: Math.round((desktopCount / totalDev) * 100),
+    tablet: Math.round((tabletCount / totalDev) * 100),
+    mobileCount,
+    desktopCount,
+    tabletCount,
+  };
+
+  // Top Pages
+  const pageMap: Record<string, number> = {};
+  logs.forEach((l) => {
+    const p = l.page || '/';
+    pageMap[p] = (pageMap[p] || 0) + 1;
+  });
+  const topPages = Object.entries(pageMap)
+    .map(([page, count]) => ({ page, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  // Top Browsers
+  const browserMap: Record<string, number> = {};
+  logs.forEach((l) => {
+    const b = l.browser || 'Google Chrome';
+    browserMap[b] = (browserMap[b] || 0) + 1;
+  });
+  const topBrowsers = Object.entries(browserMap)
+    .map(([browser, count]) => ({ browser, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  // 7 Days Daily Activity
+  const dayMap: Record<string, number> = {};
+  logs.forEach((l) => {
+    const parsed = parseVisitorTimestamp(l.timestamp);
+    dayMap[parsed.dateStr] = (dayMap[parsed.dateStr] || 0) + 1;
+  });
+
+  const days: { date: string; label: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const labelStr = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+    const count = dayMap[dateStr] || 0;
+    days.push({ date: dateStr, label: labelStr, count });
+  }
+
+  return {
+    totalViews,
+    uniqueVisitors,
+    devicePercentages,
+    topPages,
+    topBrowsers,
+    dailyCounts: days,
+    logs: logs.slice(0, 200),
+  };
+}
+
+/**
+ * Directly queries Google Apps Script to fetch latest Analytics_Logs rows
+ */
+export async function fetchRemoteAnalyticsFromSpreadsheet(
+  spreadsheetUrl?: string
+): Promise<VisitorRecord[] | null> {
+  const targetUrl = spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null) || DEFAULT_GAS_URL;
+  if (!targetUrl || !targetUrl.startsWith('https://script.google.com/')) {
+    return null;
+  }
+
+  try {
+    const fetchUrl = targetUrl.includes('?')
+      ? `${targetUrl}&action=GET_ANALYTICS&_t=${Date.now()}`
+      : `${targetUrl}?action=GET_ANALYTICS&_t=${Date.now()}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(fetchUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.status === 'success' && Array.isArray(json.data)) {
+        return json.data as VisitorRecord[];
+      }
+    }
+  } catch (e) {
+    console.warn('Direct GAS Analytics fetch error:', e);
+  }
+  return null;
+}
+
+/**
  * Returns summary statistics calculated purely from real recorded logs
  */
 export function getLocalAnalyticsSummary(): LocalAnalyticsSummary {
@@ -281,75 +466,7 @@ export function getLocalAnalyticsSummary(): LocalAnalyticsSummary {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const logs: VisitorRecord[] = raw ? JSON.parse(raw) : [];
-
-    const totalViews = logs.length;
-    const uniqueVisitorIds = new Set(logs.map((l) => l.visitorId || 'default'));
-    const uniqueVisitors = uniqueVisitorIds.size;
-
-    // Device breakdown
-    let mobileCount = logs.filter((l) => l.device === 'Mobile').length;
-    let desktopCount = logs.filter((l) => l.device === 'Desktop').length;
-    let tabletCount = logs.filter((l) => l.device === 'Tablet').length;
-
-    if (totalViews === 0) {
-      const currentDev = getDeviceType(navigator.userAgent || '');
-      if (currentDev === 'Mobile') mobileCount = 1;
-      else if (currentDev === 'Tablet') tabletCount = 1;
-      else desktopCount = 1;
-    }
-
-    const totalDev = Math.max(1, mobileCount + desktopCount + tabletCount);
-    const devicePercentages = {
-      mobile: Math.round((mobileCount / totalDev) * 100),
-      desktop: Math.round((desktopCount / totalDev) * 100),
-      tablet: Math.round((tabletCount / totalDev) * 100),
-      mobileCount,
-      desktopCount,
-      tabletCount,
-    };
-
-    // Top Pages
-    const pageMap: Record<string, number> = {};
-    logs.forEach((l) => {
-      const p = l.page || '/';
-      pageMap[p] = (pageMap[p] || 0) + 1;
-    });
-    const topPages = Object.entries(pageMap)
-      .map(([page, count]) => ({ page, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Top Browsers
-    const browserMap: Record<string, number> = {};
-    logs.forEach((l) => {
-      const b = l.browser || 'Chrome';
-      browserMap[b] = (browserMap[b] || 0) + 1;
-    });
-    const topBrowsers = Object.entries(browserMap)
-      .map(([browser, count]) => ({ browser, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Daily counts for past 7 days
-    const days: { date: string; label: string; count: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const labelStr = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
-      const count = logs.filter((l) => l.timestamp.startsWith(dateStr)).length;
-      days.push({ date: dateStr, label: labelStr, count });
-    }
-
-    return {
-      totalViews: Math.max(logs.length > 0 ? logs.length : 1, 1),
-      uniqueVisitors: Math.max(uniqueVisitors > 0 ? uniqueVisitors : 1, 1),
-      devicePercentages,
-      topPages,
-      topBrowsers,
-      dailyCounts: days,
-      logs,
-    };
+    return calculateAnalyticsSummaryFromLogs(logs);
   } catch {
     return {
       totalViews: 1,

@@ -19,11 +19,15 @@ import {
   Filter,
   BarChart2,
   ArrowUpRight,
+  Database,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   getLocalAnalyticsSummary,
   clearLocalAnalytics,
   trackRealVisitor,
+  calculateAnalyticsSummaryFromLogs,
+  fetchRemoteAnalyticsFromSpreadsheet,
   VisitorRecord,
 } from '../utils/analyticsTracker';
 
@@ -32,6 +36,7 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const gaGeneralUrl = 'https://analytics.google.com/analytics/web/';
 
   const [isLoading, setIsLoading] = useState(false);
+  const [dataSource, setDataSource] = useState<'spreadsheet' | 'server' | 'local'>('local');
   const [totalPageViews, setTotalPageViews] = useState<number>(1);
   const [uniqueVisitors, setUniqueVisitors] = useState<number>(1);
   const [deviceBreakdown, setDeviceBreakdown] = useState({
@@ -46,12 +51,61 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const [topBrowsers, setTopBrowsers] = useState<{ browser: string; count: number }[]>([]);
   const [dailyCounts, setDailyCounts] = useState<{ date: string; label: string; count: number }[]>([]);
   const [recentLogs, setRecentLogs] = useState<VisitorRecord[]>([]);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
-  // Fetch actual recorded visitor data
+  // Fetch actual recorded visitor data from Google Spreadsheet first, fallback to server & local
   const refreshAnalyticsData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Get real data stored in browser localStorage
+      const spreadsheetUrl = data?.companyConfig?.spreadsheetUrl;
+      let logsToUse: VisitorRecord[] | null = null;
+
+      // 1. Try to fetch directly from Google Spreadsheet Analytics_Logs
+      if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
+        const sheetLogs = await fetchRemoteAnalyticsFromSpreadsheet(spreadsheetUrl);
+        if (sheetLogs && sheetLogs.length > 0) {
+          logsToUse = sheetLogs;
+          setDataSource('spreadsheet');
+        }
+      }
+
+      // 2. Check if AppData already contains analyticsLogs from regular GET_DATA sync
+      if (!logsToUse && data?.analyticsLogs && data.analyticsLogs.length > 0) {
+        logsToUse = data.analyticsLogs as VisitorRecord[];
+        setDataSource('spreadsheet');
+      }
+
+      // 3. Fallback to server endpoint
+      if (!logsToUse || logsToUse.length === 0) {
+        try {
+          const res = await fetch('/api/analytics/stats');
+          if (res.ok) {
+            const json = await res.json();
+            if (json.status === 'success' && json.data && json.data.logs && json.data.logs.length > 0) {
+              logsToUse = json.data.logs as VisitorRecord[];
+              setDataSource('server');
+            }
+          }
+        } catch {
+          // ignore server offline
+        }
+      }
+
+      // 4. If remote logs found, calculate summary from them
+      if (logsToUse && logsToUse.length > 0) {
+        const summary = calculateAnalyticsSummaryFromLogs(logsToUse);
+        setTotalPageViews(summary.totalViews);
+        setUniqueVisitors(summary.uniqueVisitors);
+        setDeviceBreakdown(summary.devicePercentages);
+        setTopPages(summary.topPages);
+        setTopBrowsers(summary.topBrowsers);
+        setDailyCounts(summary.dailyCounts);
+        setRecentLogs(summary.logs);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
+        return;
+      }
+
+      // 5. Ultimate Fallback: get real data stored in browser localStorage
       const local = getLocalAnalyticsSummary();
       setTotalPageViews(local.totalViews);
       setUniqueVisitors(local.uniqueVisitors);
@@ -60,29 +114,14 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
       setTopBrowsers(local.topBrowsers);
       setDailyCounts(local.dailyCounts || []);
       setRecentLogs(local.logs || []);
-
-      // 2. Query server endpoint for persistent server logs if available
-      try {
-        const res = await fetch('/api/analytics/stats');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.status === 'success' && json.data) {
-            const d = json.data;
-            if (d.totalPageViews > local.totalViews) {
-              setTotalPageViews(d.totalPageViews);
-              setUniqueVisitors(d.uniqueVisitors || 1);
-            }
-          }
-        }
-      } catch {
-        // server endpoint offline fallback to local summary
-      }
+      setDataSource('local');
+      setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
     } catch (err) {
       console.warn('Error loading real analytics stats:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [data?.companyConfig?.spreadsheetUrl, data?.analyticsLogs]);
 
   useEffect(() => {
     refreshAnalyticsData();
@@ -94,11 +133,13 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
 
   const handleManualPing = () => {
     trackRealVisitor(window.location.pathname || '/', 'pageview', data?.companyConfig?.spreadsheetUrl);
-    refreshAnalyticsData();
+    setTimeout(() => {
+      refreshAnalyticsData();
+    }, 800);
   };
 
   const handleClearLogs = () => {
-    if (window.confirm('Hapus seluruh riwayat log kunjungan lokal di browser ini?')) {
+    if (window.confirm('Hapus seluruh riwayat log kunjungan lokal di browser ini? (Data di Google Spreadsheet tetap tersimpan)')) {
       clearLocalAnalytics();
       refreshAnalyticsData();
     }
@@ -114,17 +155,31 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
               <Activity className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
               <span>100% Data Kunjungan Riil (Real Tracking)</span>
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Tersambung Aktif
-            </span>
+
+            {dataSource === 'spreadsheet' ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                <FileSpreadsheet className="w-3 h-3 text-emerald-300" />
+                <span>Tersinkron Database Spreadsheet</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                <Database className="w-3 h-3 text-amber-300" />
+                <span>Sinkronisasi Lokal/Server</span>
+              </span>
+            )}
+
+            {lastSyncTime && (
+              <span className="text-[10px] text-red-200 opacity-90">
+                Pembaruan: {lastSyncTime}
+              </span>
+            )}
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
             Dashboard Analitik Pengunjung Nyata
           </h2>
           <p className="text-xs sm:text-sm text-red-100 max-w-2xl leading-relaxed">
-            Data ini dihitung langsung dari aktivitas pengunjung yang benar-benar membuka website Anda, bukan angka buatan / simulasi dummy.
+            Data ini tersinkron langsung dari tab <strong className="text-white underline decoration-red-300">Analytics_Logs</strong> di Google Spreadsheet Anda, mencakup seluruh pengunjung dari HP maupun Komputer secara akurat (Waktu Indonesia Barat / WIB).
           </p>
         </div>
 
@@ -132,30 +187,30 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
           <button
             onClick={handleManualPing}
             className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs"
-            title="Uji pencatatan sesi kunjungan Anda saat ini"
+            title="Uji pencatatan sesi kunjungan Anda saat ini ke Google Spreadsheet"
           >
             <Radio className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
-            <span>Tes Ping Sesi Saya</span>
+            <span>Tes Ping Kunjungan</span>
           </button>
 
           <button
             onClick={refreshAnalyticsData}
             disabled={isLoading}
-            className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs disabled:opacity-50"
-            title="Segarkan data analitik dari log terbaru"
+            className="px-3.5 py-2 rounded-xl bg-white text-red-900 hover:bg-red-50 text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            title="Tarik data analitik terbaru dari Google Spreadsheet"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'Memuat...' : 'Segarkan'}</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-red-700 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>{isLoading ? 'Menyinkronkan...' : 'Sinkronkan Data'}</span>
           </button>
 
           <a
             href={gaGeneralUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3.5 py-2 rounded-xl bg-white text-red-800 hover:bg-red-50 text-xs font-black flex items-center gap-1.5 shadow-sm transition-all"
+            className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
             title="Buka portal resmi Google Analytics"
           >
-            <ExternalLink className="w-3.5 h-3.5 text-red-600" />
+            <ExternalLink className="w-3.5 h-3.5 text-red-200" />
             <span>Portal GA4 Web</span>
           </a>
         </div>
@@ -189,7 +244,7 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Total Tayangan Halaman
+              Total Kunjungan (Spreadsheet)
             </span>
             <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Eye className="w-4 h-4" />
@@ -201,7 +256,7 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
               <TrendingUp className="w-3 h-3" />
-              <span>Pageviews Riil Tercatat</span>
+              <span>Total Baris Log Terakumulasi</span>
             </div>
           </div>
         </div>
@@ -300,13 +355,13 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-emerald-500 animate-pulse" />
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Log Kunjungan Nyata (Real Live Feed)
+                  Log Kunjungan Nyata (Tersinkron Database Spreadsheet)
                 </h3>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
-                  {recentLogs.length} Log Terbaca
+                  {recentLogs.length} Baris Terbaca
                 </span>
                 {recentLogs.length > 0 && (
                   <button
@@ -322,14 +377,14 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
 
             <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[360px] overflow-y-auto pr-1">
               {recentLogs.length > 0 ? (
-                recentLogs.map((log) => (
+                recentLogs.map((log, index) => (
                   <div
-                    key={log.id}
+                    key={log.id || `log_${index}`}
                     className="py-3 flex items-start justify-between gap-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-800/40 px-2 rounded-xl transition-colors"
                   >
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 mt-0.5">
-                        {log.device === 'Mobile' ? (
+                        {log.device?.toLowerCase().includes('mobile') || log.device?.toLowerCase().includes('hp') ? (
                           <Smartphone className="w-4 h-4 text-blue-500" />
                         ) : (
                           <Laptop className="w-4 h-4 text-purple-500" />
@@ -352,16 +407,16 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
                         </div>
 
                         <div className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap text-[11px]">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">{log.device}</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{log.device || 'Perangkat'}</span>
                           <span>•</span>
-                          <span>{log.browser}</span>
+                          <span>{log.browser || 'Browser'}</span>
                           <span>•</span>
                           <span className="text-slate-400">{log.referrer || 'Langsung'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-[11px] font-semibold text-slate-400 shrink-0 mt-0.5">
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0 mt-0.5 text-right">
                       {log.timestamp && log.timestamp.includes('WIB')
                         ? log.timestamp
                         : !isNaN(new Date(log.timestamp).getTime())
@@ -378,8 +433,8 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
                   </div>
                 ))
               ) : (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  Belum ada log kunjungan riil yang terekam di browser ini. Cobalah membuka halaman katalog atau klik "Tes Ping Sesi Saya" di kanan atas.
+                <div className="py-8 text-center text-xs text-slate-400 space-y-2">
+                  <p>Belum ada data log yang dimuat. Klik tombol <strong>"Sinkronkan Data"</strong> di kanan atas untuk menarik log dari spreadsheet.</p>
                 </div>
               )}
             </div>

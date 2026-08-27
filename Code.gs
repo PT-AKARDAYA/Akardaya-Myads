@@ -175,6 +175,15 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === "GET_ANALYTICS") {
+      const analyticsLogs = readAnalyticsSheet(ss);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        data: analyticsLogs,
+        count: analyticsLogs.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Dukungan pelacakan via GET request
     if (action === "track_visitor") {
       const analyticsSheetName = "Analytics_Logs";
@@ -472,7 +481,31 @@ function readAllSheets(ss) {
   // 7. Baca Sheet PESANAN_LEADS
   result.orders = readLeadsSheet(ss);
 
+  // 8. Baca Sheet Analytics_Logs (Log Pengunjung Riil)
+  result.analyticsLogs = readAnalyticsSheet(ss);
+
   return result;
+}
+
+function readAnalyticsSheet(ss) {
+  const sheet = ss.getSheetByName("Analytics_Logs");
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  const lastRow = sheet.getLastRow();
+  const numRows = Math.min(lastRow - 1, 1000);
+  const startRow = lastRow - numRows + 1;
+  const rows = sheet.getRange(startRow, 1, numRows, 8).getValues();
+
+  return rows.map(r => ({
+    timestamp: String(r[0] || ""),
+    visitorId: String(r[1] || ""),
+    page: String(r[2] || "/"),
+    device: String(r[3] || "Unknown"),
+    browser: String(r[4] || "Unknown"),
+    referrer: String(r[5] || "Direct"),
+    eventType: String(r[6] || "pageview"),
+    screen: String(r[7] || "")
+  })).reverse();
 }
 
 function readLeadsSheet(ss) {
