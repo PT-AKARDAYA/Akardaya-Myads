@@ -128,6 +128,16 @@ function setupSheets() {
     s.setFrozenRows(1);
     formatHeader(s, "#DC2626");
   }
+
+  // 8. Sheet ANALITIK_PENGUNJUNG (Analytics_Logs)
+  if (!ss.getSheetByName("Analytics_Logs")) {
+    const s = ss.insertSheet("Analytics_Logs");
+    s.appendRow([
+      "Tanggal (WIB)", "Visitor ID", "Total Hits", "Halaman Dikunjungi", "Perangkat", "Browser", "Sumber / Referrer", "Waktu Pertama (WIB)", "Terakhir Aktif (WIB)"
+    ]);
+    s.setFrozenRows(1);
+    formatHeader(s, "#0F766E"); // Teal header
+  }
 }
 
 function formatHeader(sheet, bgColor) {
@@ -151,6 +161,34 @@ function doGet(e) {
         timestamp: new Date().toISOString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
+
+    if (action === "GET_LEADS") {
+      const leads = readLeadsSheet(ss);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        data: leads
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "GET_ANALYTICS") {
+      const analyticsLogs = readAnalyticsSheet(ss);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        data: analyticsLogs,
+        count: analyticsLogs.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "track_visitor") {
+      const p = e && e.parameter ? e.parameter : {};
+      const trackResult = recordVisitorLogConsolidated(ss, p);
+      return ContentService.createTextOutput(JSON.stringify(trackResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "Action tidak dikenal"
+    })).setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
@@ -163,14 +201,26 @@ function doPost(e) {
   setupSheets();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   try {
-    let requestBody = JSON.parse(e.postData.contents);
-    const action = requestBody.action || "SAVE_DATA";
+    let requestBody = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        requestBody = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        requestBody = {};
+      }
+    }
+    if (e && e.parameter) {
+      requestBody = Object.assign({}, e.parameter, requestBody);
+    }
+
+    const action = requestBody.action || (e && e.parameter && e.parameter.action) || "SAVE_DATA";
 
     if (action === "SAVE_DATA") {
       saveAllSheets(ss, requestBody.payload || {});
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        message: "Data berhasil disimpan ke 7 sheet masing-masing di Google Spreadsheet"
+        message: "Data berhasil disimpan ke sheet masing-masing",
+        updatedAt: new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -192,6 +242,34 @@ function doPost(e) {
       ]);
       return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
     }
+
+    if (action === "ADD_REVIEW") {
+      const sheet = ss.getSheetByName(SHEET_TESTIMONIALS);
+      const review = requestBody.review || {};
+      const now = new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
+      sheet.appendRow([
+        review.id || "rev-" + Date.now(),
+        now,
+        review.name || review.ownerName || "",
+        review.companyOrStore || review.businessName || "",
+        review.role || "Pemilik Usaha",
+        review.rating || 5,
+        review.comment || "",
+        review.packageName || "Paket MyAds",
+        review.verified ? "YA" : "TIDAK"
+      ]);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "track_visitor") {
+      const trackResult = recordVisitorLogConsolidated(ss, requestBody);
+      return ContentService.createTextOutput(JSON.stringify(trackResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "Action tidak dikenal"
+    })).setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
@@ -209,6 +287,7 @@ function readAllSheets(ss) {
     offices: [],
     testimonials: [],
     orders: [],
+    analyticsLogs: [],
     lastUpdated: new Date().toISOString()
   };
 
@@ -303,37 +382,234 @@ function readAllSheets(ss) {
   if (sTest && sTest.getLastRow() > 1) {
     const rows = sTest.getRange(2, 1, sTest.getLastRow() - 1, sTest.getLastColumn()).getValues();
     result.testimonials = rows.map(t => ({
-      id: String(r[0]),
-      date: String(r[1]),
-      name: String(r[2]),
-      companyOrStore: String(r[3]),
-      role: String(r[4]),
-      rating: Number(r[5]) || 5,
-      comment: String(r[6]),
-      packageName: String(r[7]),
-      verified: String(r[8]).toUpperCase() === "YA" || r[8] === true
+      id: String(t[0]),
+      date: String(t[1]),
+      name: String(t[2]),
+      companyOrStore: String(t[3]),
+      role: String(t[4]),
+      rating: Number(t[5]) || 5,
+      comment: String(t[6]),
+      packageName: String(t[7]),
+      verified: String(t[8]).toUpperCase() === "YA" || t[8] === true
     }));
   }
 
-  const sLead = ss.getSheetByName(SHEET_LEADS);
-  if (sLead && sLead.getLastRow() > 1) {
-    const rows = sLead.getRange(2, 1, sLead.getLastRow() - 1, sLead.getLastColumn()).getValues();
-    result.orders = rows.map(r => ({
-      id: String(r[0]),
-      createdAt: String(r[1]),
-      customerName: String(r[2]),
-      whatsapp: String(r[3]),
-      businessName: r[4] ? String(r[4]) : undefined,
-      selectedPackageId: "",
-      selectedPackageName: String(r[5]),
-      estimatedBudget: String(r[6]),
-      targetCityOrArea: r[7] ? String(r[7]) : undefined,
-      status: String(r[8]) || "PENDING",
-      notes: r[9] ? String(r[9]) : ""
-    }));
-  }
+  result.orders = readLeadsSheet(ss);
+  result.analyticsLogs = readAnalyticsSheet(ss);
 
   return result;
+}
+
+function readAnalyticsSheet(ss) {
+  const sheet = ss.getSheetByName("Analytics_Logs");
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  const lastRow = sheet.getLastRow();
+  const numRows = Math.min(lastRow - 1, 1000);
+  const startRow = lastRow - numRows + 1;
+  const lastCol = Math.max(sheet.getLastColumn(), 9);
+  const rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+
+  return rows.map(r => {
+    const col0 = String(r[0] || "");
+    const col1 = String(r[1] || "");
+    const col2 = r[2];
+    const isNumericHits = typeof col2 === "number" || (!isNaN(Number(col2)) && String(col2).trim() !== "" && !String(col2).includes("/"));
+    
+    if (isNumericHits) {
+      const hits = Math.max(Number(col2) || 1, 1);
+      const pages = String(r[3] || "/");
+      const device = String(r[4] || "Unknown");
+      const browser = String(r[5] || "Unknown");
+      const referrer = String(r[6] || "Direct");
+      const firstTime = String(r[7] || "");
+      const lastTime = String(r[8] || "");
+      const fullTimestamp = col0 + (lastTime ? " " + lastTime : "");
+
+      return {
+        timestamp: fullTimestamp,
+        date: col0,
+        visitorId: col1,
+        hits: hits,
+        page: pages,
+        device: device,
+        browser: browser,
+        referrer: referrer,
+        eventType: "pageview",
+        firstTime: firstTime,
+        lastTime: lastTime
+      };
+    } else {
+      return {
+        timestamp: col0,
+        visitorId: col1,
+        hits: 1,
+        page: String(r[2] || "/"),
+        device: String(r[3] || "Unknown"),
+        browser: String(r[4] || "Unknown"),
+        referrer: String(r[5] || "Direct"),
+        eventType: String(r[6] || "pageview"),
+        screen: String(r[7] || "")
+      };
+    }
+  }).reverse();
+}
+
+function recordVisitorLogConsolidated(ss, p) {
+  const analyticsSheetName = "Analytics_Logs";
+  let sheet = ss.getSheetByName(analyticsSheetName);
+  
+  const modernHeaders = [
+    "Tanggal (WIB)",
+    "Visitor ID",
+    "Total Hits",
+    "Halaman Dikunjungi",
+    "Perangkat",
+    "Browser",
+    "Sumber / Referrer",
+    "Waktu Pertama (WIB)",
+    "Terakhir Aktif (WIB)"
+  ];
+
+  if (!sheet) {
+    sheet = ss.insertSheet(analyticsSheetName);
+    sheet.appendRow(modernHeaders);
+    sheet.setFrozenRows(1);
+    formatHeader(sheet, "#0F766E");
+  } else {
+    const firstRowValues = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 9)).getDisplayValues()[0];
+    if (!firstRowValues[2] || firstRowValues[2].toLowerCase().indexOf("hit") === -1) {
+      sheet.getRange(1, 1, 1, modernHeaders.length).setValues([modernHeaders]);
+      formatHeader(sheet, "#0F766E");
+    }
+  }
+
+  const lock = LockService.getScriptLock();
+  let hasLock = false;
+  try {
+    hasLock = lock.tryLock(10000);
+  } catch (e) {}
+
+  try {
+    const visitorId = String(p.visitorId || "unknown").trim();
+    const page = String(p.page || "/").trim();
+    const device = String(p.device || "Unknown").trim();
+    const browser = String(p.browser || "Unknown").trim();
+    const referrer = String(p.referrer || "Direct").trim();
+
+    const now = new Date();
+    const todayDateStr = Utilities.formatDate(now, "Asia/Jakarta", "yyyy-MM-dd");
+    const timeNowStr = Utilities.formatDate(now, "Asia/Jakarta", "HH:mm:ss") + " WIB";
+
+    const lastRow = sheet.getLastRow();
+    let foundRowIndex = -1;
+    let existingHits = 1;
+    let existingPages = "";
+
+    if (lastRow > 1) {
+      const checkRows = Math.min(lastRow - 1, 500);
+      const startRow = lastRow - checkRows + 1;
+      const maxCol = Math.max(sheet.getLastColumn(), 9);
+      const displayRange = sheet.getRange(startRow, 1, checkRows, maxCol).getDisplayValues();
+      const rawRange = sheet.getRange(startRow, 1, checkRows, maxCol).getValues();
+
+      for (let i = displayRange.length - 1; i >= 0; i--) {
+        const rowDisplay = displayRange[i];
+        const rowRaw = rawRange[i];
+
+        let rowDateStr = String(rowDisplay[0] || "").trim();
+        if (rowRaw[0] instanceof Date) {
+          try {
+            rowDateStr = Utilities.formatDate(rowRaw[0], "Asia/Jakarta", "yyyy-MM-dd");
+          } catch(err) {}
+        }
+        if (rowDateStr.length > 10) {
+          rowDateStr = rowDateStr.substring(0, 10);
+        }
+
+        const rowVisitorId = String(rowDisplay[1] || rowRaw[1] || "").trim();
+
+        const isDateMatch = rowDateStr === todayDateStr || rowDateStr.indexOf(todayDateStr) !== -1;
+        const isVisitorMatch = rowVisitorId === visitorId && visitorId !== "unknown";
+
+        if (isDateMatch && isVisitorMatch) {
+          foundRowIndex = startRow + i;
+          const col2Val = rowRaw[2];
+          existingHits = Number(col2Val) || Number(rowDisplay[2]) || 1;
+          existingPages = String(rowDisplay[3] || rowRaw[3] || "");
+          break;
+        }
+      }
+    }
+
+    if (foundRowIndex > 0) {
+      const newHits = existingHits + 1;
+      let pageList = existingPages ? existingPages.split(",").map(function(s) { return s.trim(); }).filter(Boolean) : [];
+      if (pageList.indexOf(page) === -1) {
+        pageList.push(page);
+      }
+      const updatedPages = pageList.join(", ");
+
+      sheet.getRange(foundRowIndex, 3).setValue(newHits);
+      sheet.getRange(foundRowIndex, 4).setValue(updatedPages);
+      if (device && device !== "Unknown") sheet.getRange(foundRowIndex, 5).setValue(device);
+      if (browser && browser !== "Unknown") sheet.getRange(foundRowIndex, 6).setValue(browser);
+      sheet.getRange(foundRowIndex, 9).setValue(timeNowStr);
+
+      return {
+        status: "success",
+        message: "Visitor log consolidated (Baris " + foundRowIndex + ", Total Hits: " + newHits + ")",
+        consolidated: true,
+        row: foundRowIndex,
+        hits: newHits
+      };
+    } else {
+      sheet.appendRow([
+        todayDateStr,
+        visitorId,
+        1,
+        page,
+        device,
+        browser,
+        referrer,
+        timeNowStr,
+        timeNowStr
+      ]);
+
+      return {
+        status: "success",
+        message: "New daily visitor row created",
+        consolidated: false,
+        hits: 1
+      };
+    }
+  } finally {
+    if (hasLock) {
+      try {
+        lock.releaseLock();
+      } catch (e) {}
+    }
+  }
+}
+
+function readLeadsSheet(ss) {
+  const sheet = ss.getSheetByName(SHEET_LEADS);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  return rows.map(r => ({
+    id: String(r[0]),
+    createdAt: String(r[1]),
+    customerName: String(r[2]),
+    whatsapp: String(r[3]),
+    businessName: r[4] ? String(r[4]) : undefined,
+    selectedPackageId: "",
+    selectedPackageName: String(r[5]),
+    estimatedBudget: String(r[6]),
+    targetCityOrArea: r[7] ? String(r[7]) : undefined,
+    status: String(r[8]) || "PENDING",
+    notes: r[9] ? String(r[9]) : ""
+  }));
 }
 
 function saveAllSheets(ss, data) {
@@ -402,6 +678,10 @@ function saveAllSheets(ss, data) {
     ]);
     s.getRange(2, 1, testRows.length, testRows[0].length).setValues(testRows);
   }
+}
+
+function doOptions(e) {
+  return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
 }`;
       await navigator.clipboard.writeText(code);
       setCopiedCode(true);
