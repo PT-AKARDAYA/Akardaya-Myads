@@ -109,7 +109,8 @@ export function initializeThirdPartyTrackers(gaId?: string, pixelId?: string) {
  */
 export function trackRealVisitor(
   page: string = '/',
-  eventType: 'pageview' | 'order_submit' | 'package_view' | 'simulasi' = 'pageview'
+  eventType: 'pageview' | 'order_submit' | 'package_view' | 'simulasi' = 'pageview',
+  spreadsheetUrl?: string
 ) {
   if (typeof window === 'undefined') return;
 
@@ -120,6 +121,8 @@ export function trackRealVisitor(
     const lastTrackKey = 'akardaya_last_track_time';
     const lastTrack = localStorage.getItem(lastTrackKey);
     const now = Date.now();
+    
+    // Allow order_submit to bypass the 3s rate limit to ensure it's tracked
     if (lastTrack && now - parseInt(lastTrack, 10) < 3000) {
       if (eventType === 'pageview') return;
     }
@@ -178,12 +181,12 @@ export function trackRealVisitor(
 
     // Send to Google Sheets Webhook if configured
     try {
-      const savedSpreadsheetUrl = localStorage.getItem('akardaya_spreadsheet_url');
-      if (savedSpreadsheetUrl && savedSpreadsheetUrl.startsWith('http')) {
-        fetch(savedSpreadsheetUrl, {
+      const activeSpreadsheetUrl = spreadsheetUrl || localStorage.getItem('akardaya_spreadsheet_url');
+      if (activeSpreadsheetUrl && activeSpreadsheetUrl.startsWith('http')) {
+        fetch(activeSpreadsheetUrl, {
           method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
+          mode: 'no-cors', // Standard Google Apps Script way
+          headers: { 'Content-Type': 'text/plain' }, // Use text/plain to avoid CORS preflight blocking in GAS
           body: JSON.stringify({
             action: 'track_visitor',
             visitorId,

@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { HeroPromo } from './components/HeroPromo';
@@ -8,6 +8,7 @@ import { OrderModal } from './components/OrderModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
+import { trackRealVisitor } from './utils/analyticsTracker';
 
 // Lazy loaded below-the-fold components (Drastically reduces initial JS bundle size)
 const ProductInventoryShowcase = React.lazy(() => import('./components/ProductInventoryShowcase').then(module => ({ default: module.ProductInventoryShowcase })));
@@ -26,6 +27,18 @@ const FallbackLoader = () => (
 );
 
 const MainLayout: React.FC = () => {
+  const { config } = useApp();
+
+  useEffect(() => {
+    // Automatically track visitor when the app loads, passing the global spreadsheet URL
+    if (config?.companyConfig?.spreadsheetUrl) {
+      trackRealVisitor(window.location.pathname || '/', 'pageview', config.companyConfig.spreadsheetUrl);
+    } else {
+      // Fallback if config is not ready yet
+      trackRealVisitor(window.location.pathname || '/', 'pageview');
+    }
+  }, [config?.companyConfig?.spreadsheetUrl]);
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-500 selection:text-white">
       <Toast />
