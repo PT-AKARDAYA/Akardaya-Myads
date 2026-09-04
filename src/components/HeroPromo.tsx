@@ -17,6 +17,19 @@ export const HeroPromo: React.FC = () => {
   const { data, openOrderModalForPackage } = useApp();
   const { discountConfig, companyConfig } = data;
 
+  const displayTitle = (discountConfig.promoTitle || 'Promo Bonus Saldo Isi Ulang 1% - 50%').replace(
+    /diskon saldo/gi,
+    'Bonus Saldo'
+  );
+  const displayBadge = (discountConfig.promoBadge || 'Spesial Bonus Saldo').replace(
+    /diskon/gi,
+    'Bonus'
+  );
+  const displayDescription = (
+    discountConfig.promoDescription ||
+    'Dapatkan bonus saldo monetary langsung (atau sesuai setting admin) setiap top-up saldo My Ads untuk semua channel promosi!'
+  ).replace(/potongan langsung/gi, 'bonus saldo monetary langsung');
+
   // Countdown timer calculation
   const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number }>({
     hours: 48,
@@ -115,26 +128,26 @@ export const HeroPromo: React.FC = () => {
                 className="w-full sm:w-auto px-6 py-3.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-2"
               >
                 <Percent className="w-4 h-4 text-emerald-500" />
-                <span>Simulasi Biaya & Diskon</span>
+                <span>Simulasi Biaya & Bonus Saldo</span>
               </button>
             </div>
           </div>
 
-          {/* Right Column: Special Reload Discount Card & Promo Box */}
+          {/* Right Column: Special Reload Bonus Card & Promo Box */}
           <div className="lg:col-span-5">
             <div
               id="promo-discount-card"
-              className="relative p-6 sm:p-7 rounded-2xl border border-blue-200 dark:border-blue-800/80 bg-gradient-to-br from-blue-50/90 via-white to-indigo-50/70 dark:from-slate-800/95 dark:via-slate-850 dark:to-slate-900 shadow-xl overflow-hidden"
+              className="relative p-6 sm:p-7 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 bg-gradient-to-br from-emerald-50/80 via-white to-blue-50/70 dark:from-slate-800/95 dark:via-slate-850 dark:to-slate-900 shadow-xl overflow-hidden"
             >
               {/* Top Pill / Badge */}
               <div className="flex items-center justify-between gap-2 mb-4">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60">
                   <Award className="w-3.5 h-3.5 text-amber-500" />
-                  {discountConfig.promoBadge || 'Spesial Promo Hari Ini'}
+                  {displayBadge}
                 </span>
 
                 <div className="flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  <Clock className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                  <Clock className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
                   <span>
                     {String(timeLeft.hours).padStart(2, '0')}:
                     {String(timeLeft.minutes).padStart(2, '0')}:
@@ -145,25 +158,25 @@ export const HeroPromo: React.FC = () => {
 
               {/* Promo Title */}
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-                {discountConfig.promoTitle}
+                {displayTitle}
               </h2>
 
               <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                {discountConfig.promoDescription}
+                {displayDescription}
               </p>
 
-              {/* Special Big Discount Number Metric */}
+              {/* Special Big Bonus Number Metric */}
               <div className="mt-5 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Diskon Isi Ulang Saldo
+                    Bonus Isi Ulang Saldo
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
                     <span className="text-3xl sm:text-4xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {discountConfig.reloadDiscountPercent}%
+                      {discountConfig.reloadDiscountPercent > 0 ? `${discountConfig.reloadDiscountPercent}%` : 's/d 50%'}
                     </span>
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      OFF Setiap Top Up
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      BONUS Setiap Top Up
                     </span>
                   </div>
                 </div>
@@ -180,10 +193,10 @@ export const HeroPromo: React.FC = () => {
                   className="w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow transition-all flex items-center justify-center gap-2"
                 >
                   <TrendingUp className="w-4 h-4" />
-                  <span>Klaim Diskon & Konsultasi Sekarang</span>
+                  <span>Klaim Bonus & Konsultasi Sekarang</span>
                 </button>
                 <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
-                  *Diskon isi ulang dan bonus website otomatis aktif di akun MyAds Anda
+                  *Bonus saldo isi ulang dan bonus website otomatis aktif di akun MyAds Anda
                 </p>
               </div>
             </div>

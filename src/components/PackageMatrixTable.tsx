@@ -356,7 +356,7 @@ export const PackageMatrixTable: React.FC = () => {
               Tabel Fasilitas & Matriks Fitur Paket
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-              Perbandingan detail fasilitas SMS, MMS, USSD, RCS, WA WABA, gratis konten, website, dan diskon isi ulang {discountConfig.reloadDiscountPercent}%.
+              Perbandingan detail fasilitas SMS, MMS, USSD, RCS, WA WABA, gratis konten, website, dan bonus saldo isi ulang s/d {discountConfig.reloadDiscountPercent}%.
             </p>
           </div>
 
@@ -432,9 +432,9 @@ export const PackageMatrixTable: React.FC = () => {
                   <th className="p-2 text-center border-l border-amber-300/40">&gt;500.000</th>
                   <th className="p-2 text-center border-l border-amber-300/40">&gt;1000.000</th>
 
-                  {/* Diskon Isi Ulang Column */}
+                  {/* Bonus Saldo Isi Ulang Column */}
                   <th className="p-2 text-center border-l border-amber-300/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-extrabold">
-                    Setting Admin ({discountConfig.reloadDiscountPercent}%)
+                    Bonus Saldo ({discountConfig.reloadDiscountPercent}%)
                   </th>
                 </tr>
               </thead>
@@ -522,10 +522,10 @@ export const PackageMatrixTable: React.FC = () => {
                             </span>
                             <div>
                               <p className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
-                                Diskon Otomatis
+                                Bonus Saldo
                               </p>
                               <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                Misal {discountConfig.reloadDiscountPercent}% bisa di setting kapan saja di Dashboard Admin.
+                                Bonus monetary s/d 50% atau sesuai setting di Dashboard Admin.
                               </p>
                             </div>
                             <button

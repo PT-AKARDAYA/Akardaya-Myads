@@ -460,11 +460,11 @@ export const INITIAL_APP_DATA: AppData = {
   packages: DEFAULT_PACKAGES,
   channelRates: DEFAULT_CHANNEL_RATES,
   discountConfig: {
-    reloadDiscountPercent: 3, // Misal 3% bisa di setting
+    reloadDiscountPercent: 50,
     isPromoActive: true,
-    promoTitle: 'Promo Diskon Saldo Isi Ulang 3%',
-    promoBadge: 'Spesial Diskon Topup',
-    promoDescription: 'Dapatkan potongan langsung 3% (atau sesuai setting admin) setiap top-up saldo My Ads untuk semua channel promosi!',
+    promoTitle: 'Promo Bonus Saldo Isi Ulang 1% - 50%',
+    promoBadge: 'Spesial Bonus Saldo',
+    promoDescription: 'Dapatkan bonus saldo monetary langsung (atau sesuai setting admin) setiap top-up saldo My Ads untuk semua channel promosi!',
     promoCountdownEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   companyConfig: {
@@ -475,7 +475,7 @@ export const INITIAL_APP_DATA: AppData = {
     supportEmail: 'support@myadspro.id',
     officeAddress: 'Gedung Cyber Digital Lantai 8, Jakarta Selatan',
     operatingHours: 'Senin - Sabtu ( 08.00 - 16.00 )',
-    announcementText: '🎉 Diskon Spesial Top-Up 3% & Gratis Pembuatan Website 3 Bulan untuk Paket Pilihan! Konsultasikan kebutuhan iklan bisnis Anda sekarang.',
+    announcementText: '🎉 Promo Bonus Saldo Top-Up s/d 50% & Gratis Pembuatan Website 3 Bulan untuk Paket Pilihan! Konsultasikan kebutuhan iklan bisnis Anda sekarang.',
     showAnnouncement: true,
     spreadsheetUrl: 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec',
   },

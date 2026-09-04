@@ -17,10 +17,22 @@ export const safeNormalizeData = (incoming: any): AppData => {
     ? incoming.channelRates
     : DEFAULT_CHANNEL_RATES;
 
+  const rawDiscountConfig = incoming.discountConfig && typeof incoming.discountConfig === 'object' ? incoming.discountConfig : {};
   const safeDiscountConfig: DiscountConfig = {
     ...INITIAL_APP_DATA.discountConfig,
-    ...(incoming.discountConfig && typeof incoming.discountConfig === 'object' ? incoming.discountConfig : {}),
+    ...rawDiscountConfig,
   };
+
+  // Ensure "Promo Diskon Saldo" is migrated to "Promo Bonus Saldo" seamlessly
+  if (safeDiscountConfig.promoTitle && /diskon saldo/i.test(safeDiscountConfig.promoTitle)) {
+    safeDiscountConfig.promoTitle = safeDiscountConfig.promoTitle.replace(/diskon saldo/gi, 'Bonus Saldo');
+  }
+  if (safeDiscountConfig.promoBadge && /diskon/i.test(safeDiscountConfig.promoBadge)) {
+    safeDiscountConfig.promoBadge = safeDiscountConfig.promoBadge.replace(/diskon/gi, 'Bonus');
+  }
+  if (safeDiscountConfig.promoDescription && /potongan langsung/i.test(safeDiscountConfig.promoDescription)) {
+    safeDiscountConfig.promoDescription = 'Dapatkan bonus saldo monetary langsung (atau sesuai setting admin) setiap top-up saldo My Ads untuk semua channel promosi!';
+  }
 
   const safeCompanyConfig: CompanyConfig = {
     ...INITIAL_APP_DATA.companyConfig,

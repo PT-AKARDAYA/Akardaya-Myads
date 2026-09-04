@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   CreditCard,
   Layers,
+  Gift,
 } from 'lucide-react';
 
 export const AdCostCalculator: React.FC = () => {
@@ -32,7 +33,7 @@ export const AdCostCalculator: React.FC = () => {
   const [selectedRateId, setSelectedRateId] = useState<string>(channelRates[0]?.id || 'sms_broadcast');
   const [calcMode, setCalcMode] = useState<'BUDGET' | 'REACH'>('BUDGET');
   const [budgetInput, setBudgetInput] = useState<number>(500000);
-  const [reachInput, setReachInput] = useState<number>(3000);
+  const [reachInput, setReachInput] = useState<number>(5000);
 
   const currentRate = channelRates.find((r) => r.id === selectedRateId) || channelRates[0];
   const unitPrice = currentRate ? currentRate.ratePerUnit : 100;
@@ -57,35 +58,82 @@ export const AdCostCalculator: React.FC = () => {
   }) || data.packages[0];
 
   // ==========================================
-  // 2. STATE: KALKULASI TOPUP SALDO DENGAN DISKON MANUAL
+  // 2. STATE & LOGIC: KALKULASI TOPUP SALDO & BONUS MONETARY (SESUAI TABEL)
   // ==========================================
   const [topupNominal, setTopupNominal] = useState<number>(1000000);
-  const [discountMode, setDiscountMode] = useState<'PERCENT' | 'NOMINAL'>('PERCENT');
-  const [customDiscountPercent, setCustomDiscountPercent] = useState<number>(discountConfig.reloadDiscountPercent || 5);
-  const [customDiscountNominal, setCustomDiscountNominal] = useState<number>(50000);
+  const [isCustomBonusMode, setIsCustomBonusMode] = useState<boolean>(false);
+  const [customBonusPercent, setCustomBonusPercent] = useState<number>(50);
+
+  // Tabel Skema Bonus Monetary sesuai data tabel resmi:
+  // <=500.000           : 0%
+  // 500.000 - 1.000.000 : 30%
+  // >=1.000.000         : 50%
+  const MONETARY_TIERS = [
+    {
+      id: 'tier-0',
+      label: '<=500.000',
+      nominalDisplay: '<= Rp 500.000',
+      bonusPercent: 0,
+      description: 'Saldo utama utuh, tanpa bonus monetary',
+    },
+    {
+      id: 'tier-30',
+      label: '500.000 - 1.000.000',
+      nominalDisplay: 'Rp 500.000 - 1.000.000',
+      bonusPercent: 30,
+      description: 'Mendapatkan ekstra bonus saldo monetary +30%',
+    },
+    {
+      id: 'tier-50',
+      label: '>=1.000.000',
+      nominalDisplay: '>= Rp 1.000.000',
+      bonusPercent: 50,
+      description: 'Mendapatkan ekstra bonus saldo monetary maksimal +50%',
+    },
+  ];
+
+  // Tentukan tier aktif berdasarkan nominal
+  const getActiveTier = (amount: number) => {
+    if (amount >= 1000000) return MONETARY_TIERS[2];
+    if (amount >= 500000) return MONETARY_TIERS[1];
+    return MONETARY_TIERS[0];
+  };
+
+  const currentTier = getActiveTier(topupNominal);
+
+  // Persentase bonus monetary efektif
+  const effectiveBonusPercent = isCustomBonusMode
+    ? Math.max(0, Math.min(200, Number(customBonusPercent) || 0))
+    : currentTier.bonusPercent;
+
+  // Safe nominal
+  const safeTopupNominal = Math.max(50000, Number(topupNominal) || 0);
+
+  // 1. Saldo Utama: 100% utuh sesuai nominal yang diisi/ditransfer
+  const saldoUtama = safeTopupNominal;
+
+  // 2. Bonus Monetary: persentase dari saldo utama
+  const bonusMonetary = Math.round((saldoUtama * effectiveBonusPercent) / 100);
+
+  // 3. Total Saldo yang Diterima di Akun: Saldo Utama + Bonus Monetary
+  const totalSaldoDiterima = saldoUtama + bonusMonetary;
+
+  // 4. Total Yang Ditransfer / Dibayar: Murni nominal saldo utama (tanpa potongan/diskon)
+  const totalYangDitransfer = safeTopupNominal;
 
   // Quick preset nominal options
-  const quickTopupNominals = [200000, 500000, 1000000, 2500000, 5000000, 10000000];
-  const quickDiscountPercents = [0, 3, 5, 7.5, 10, 15];
+  const quickTopupNominals = [
+    { nominal: 200000, label: 'Rp 200 Rb' },
+    { nominal: 500000, label: 'Rp 500 Rb' },
+    { nominal: 750000, label: 'Rp 750 Rb' },
+    { nominal: 1000000, label: 'Rp 1 Juta' },
+    { nominal: 2500000, label: 'Rp 2.5 Juta' },
+    { nominal: 5000000, label: 'Rp 5 Juta' },
+  ];
 
-  // Top-up calculation
-  const safeTopupNominal = Math.max(50000, Number(topupNominal) || 0);
-  let topupSavings = 0;
-  let topupFinalPay = 0;
-  let effectiveDiscountPercent = 0;
-
-  if (discountMode === 'PERCENT') {
-    effectiveDiscountPercent = Math.max(0, Math.min(100, Number(customDiscountPercent) || 0));
-    topupSavings = Math.round((safeTopupNominal * effectiveDiscountPercent) / 100);
-    topupFinalPay = Math.max(0, safeTopupNominal - topupSavings);
-  } else {
-    topupSavings = Math.max(0, Math.min(safeTopupNominal, Number(customDiscountNominal) || 0));
-    topupFinalPay = Math.max(0, safeTopupNominal - topupSavings);
-    effectiveDiscountPercent = safeTopupNominal > 0 ? Number(((topupSavings / safeTopupNominal) * 100).toFixed(1)) : 0;
-  }
-
-  // Estimated SMS broadcast equivalents from topup balance
-  const approxSmsReach = Math.floor(safeTopupNominal / (channelRates[0]?.ratePerUnit || 100));
+  // Estimated reach from Total Saldo
+  const approxSmsReachTotal = Math.floor(totalSaldoDiterima / (channelRates[0]?.ratePerUnit || 100));
+  const approxSmsReachBonusOnly = Math.floor(bonusMonetary / (channelRates[0]?.ratePerUnit || 100));
 
   // ==========================================
   // HANDLERS: SHARE TO WHATSAPP
@@ -118,10 +166,12 @@ export const AdCostCalculator: React.FC = () => {
     trackRealVisitor('/kalkulator-biaya/pengajuan-topup-saldo-wa', 'simulasi', companyConfig.spreadsheetUrl);
     const text =
       `Halo ${companyConfig.brandName}, saya ingin melakukan Top-Up Saldo MyAds dengan simulasi berikut:\n\n` +
-      `💳 *Nominal Saldo Diterima:* Rp ${safeTopupNominal.toLocaleString('id-ID')}\n` +
-      `🎁 *Setting Diskon (${effectiveDiscountPercent}%):* Hemat Rp ${topupSavings.toLocaleString('id-ID')}\n` +
-      `✨ *Total Yang Ditransfer:* Rp ${topupFinalPay.toLocaleString('id-ID')}\n\n` +
-      `Mohon dibantu instruksi pembayaran dan aktivasi saldo akun MyAds saya. Terima kasih!`;
+      `💳 *Nominal Top-Up / Transfer:* Rp ${totalYangDitransfer.toLocaleString('id-ID')}\n` +
+      `🪙 *Saldo Utama Diterima:* Rp ${saldoUtama.toLocaleString('id-ID')}\n` +
+      `🎁 *Bonus Monetary (${effectiveBonusPercent}%):* +Rp ${bonusMonetary.toLocaleString('id-ID')}\n` +
+      `✨ *Total Saldo Akun Didapat:* Rp ${totalSaldoDiterima.toLocaleString('id-ID')}\n` +
+      `👥 *Estimasi Total Jangkauan:* ±${approxSmsReachTotal.toLocaleString('id-ID')} nomor/pesan\n\n` +
+      `Mohon dibantu nomor rekening pembayaran dan aktivasi saldo akun MyAds saya. Terima kasih!`;
 
     window.open(`https://wa.me/${companyConfig.waNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -139,7 +189,7 @@ export const AdCostCalculator: React.FC = () => {
             Kalkulator Anggaran Iklan & Top-Up Saldo
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            Pilih mode kalkulasi sesuai kebutuhan Anda: simulasi jangkauan audiens kampanye atau kalkulasi pengisian saldo dengan diskon manual.
+            Pilih mode kalkulasi sesuai kebutuhan Anda: simulasi jangkauan audiens kampanye atau kalkulasi top-up saldo utama dengan bonus monetary resmi.
           </p>
 
           {/* Primary Top Navigation Tabs: Anggaran Iklan VS Topup Saldo */}
@@ -170,9 +220,9 @@ export const AdCostCalculator: React.FC = () => {
                 }`}
               >
                 <Wallet className="w-4 h-4" />
-                <span>2. Kalkulasi Top-Up Saldo (Diskon Manual)</span>
+                <span>2. Kalkulasi Top-Up Saldo & Bonus Monetary</span>
                 <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                  Baru
+                  Bonus s/d 50%
                 </span>
               </button>
             </div>
@@ -386,7 +436,7 @@ export const AdCostCalculator: React.FC = () => {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: KALKULASI TOP-UP SALDO (DENGAN SETTING DISKON MANUAL) */}
+        {/* TAB 2: KALKULASI TOP-UP SALDO & BONUS MONETARY (SESUAI TABEL RESMI) */}
         {/* ========================================================================= */}
         {activeTab === 'TOPUP' && (
           <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fadeIn">
@@ -397,15 +447,16 @@ export const AdCostCalculator: React.FC = () => {
                   <Coins className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   Pengaturan Top-Up Saldo
                 </span>
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
-                  Diskon Custom
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2.5 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                  <Gift className="w-3 h-3" />
+                  Bonus s/d 50%
                 </span>
               </div>
 
-              {/* 1. Input Nominal Saldo */}
+              {/* 1. Input Nominal Saldo Utama */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                  1. Masukkan Nominal Saldo yang Ingin Diisi
+                  1. Masukkan Nominal Saldo yang Ingin Diisi (Rp)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-sm">
@@ -447,119 +498,138 @@ export const AdCostCalculator: React.FC = () => {
                     Pilihan Cepat Nominal:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {quickTopupNominals.map((nom) => (
-                      <button
-                        key={`chip-nom-${nom}`}
-                        type="button"
-                        onClick={() => setTopupNominal(nom)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
-                          topupNominal === nom
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                            : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
-                        }`}
-                      >
-                        Rp {(nom / 1000).toLocaleString('id-ID')} Rb
-                      </button>
-                    ))}
+                    {quickTopupNominals.map((item) => {
+                      const tier = getActiveTier(item.nominal);
+                      return (
+                        <button
+                          key={`chip-nom-${item.nominal}`}
+                          type="button"
+                          onClick={() => setTopupNominal(item.nominal)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                            topupNominal === item.nominal
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          <span
+                            className={`text-[10px] px-1 rounded ${
+                              topupNominal === item.nominal
+                                ? 'bg-emerald-700 text-white'
+                                : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                            }`}
+                          >
+                            +{tier.bonusPercent}%
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
 
-              {/* 2. Setting Diskon Manual (Bisa Diisi Manual) */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    2. Setting Diskon (Isi Manual)
+              {/* 2. Tabel Skema Bonus Monetary Resmi Sesuai Ketentuan */}
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Gift className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    2. Skema Bonus Monetary Resmi
                   </label>
-                  {/* Toggle Discount Mode: Persen vs Nominal */}
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[10px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setDiscountMode('PERCENT')}
-                      className={`px-2 py-0.5 rounded-md transition-all ${
-                        discountMode === 'PERCENT'
-                          ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      Persen (%)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDiscountMode('NOMINAL')}
-                      className={`px-2 py-0.5 rounded-md transition-all ${
-                        discountMode === 'NOMINAL'
-                          ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      Nominal (Rp)
-                    </button>
-                  </div>
+                  <span className="text-[10px] text-slate-400">Klik baris untuk memilih</span>
                 </div>
 
-                {discountMode === 'PERCENT' ? (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <input
-                        type="number"
-                        id="input-custom-discount-percent"
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        value={customDiscountPercent === 0 ? '0' : customDiscountPercent || ''}
-                        onChange={(e) => setCustomDiscountPercent(Number(e.target.value))}
-                        placeholder="Contoh: 5"
-                        className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">
-                        %
-                      </div>
-                    </div>
-
-                    {/* Quick discount preset buttons */}
-                    <div>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1 font-medium">
-                        Preset Diskon Cepat:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {quickDiscountPercents.map((pct) => (
-                          <button
-                            key={`chip-pct-${pct}`}
-                            type="button"
-                            onClick={() => setCustomDiscountPercent(pct)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
-                              customDiscountPercent === pct
-                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+                {/* Table representation matching the reference table */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="bg-slate-900 text-white dark:bg-slate-950">
+                        <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px]">Nominal</th>
+                        <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px] text-center">Bonus Monetary</th>
+                        <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px] text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                      {MONETARY_TIERS.map((tier) => {
+                        const isSelected = !isCustomBonusMode && currentTier.id === tier.id;
+                        return (
+                          <tr
+                            key={tier.id}
+                            onClick={() => {
+                              setIsCustomBonusMode(false);
+                              if (tier.id === 'tier-0' && topupNominal > 500000) setTopupNominal(300000);
+                              else if (tier.id === 'tier-30' && (topupNominal < 500000 || topupNominal >= 1000000)) setTopupNominal(500000);
+                              else if (tier.id === 'tier-50' && topupNominal < 1000000) setTopupNominal(1000000);
+                            }}
+                            className={`cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-emerald-50 dark:bg-emerald-950/70 font-bold'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
                             }`}
                           >
-                            {pct}%
-                          </button>
-                        ))}
+                            <td className="py-2.5 px-3">
+                              <span className={`font-bold ${isSelected ? 'text-emerald-900 dark:text-emerald-200' : 'text-slate-800 dark:text-slate-200'}`}>
+                                {tier.label}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span
+                                className={`inline-block px-2.5 py-0.5 rounded-full font-black text-xs ${
+                                  tier.bonusPercent > 0
+                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                {tier.bonusPercent}%
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              {isSelected ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400 bg-emerald-100/90 dark:bg-emerald-950 px-2 py-0.5 rounded-md border border-emerald-300 dark:border-emerald-700">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Aktif
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">Pilih</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Custom Bonus Toggle (Optional if user needs manual adjustment) */}
+                <div className="pt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomBonusMode(!isCustomBonusMode)}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1"
+                  >
+                    <Sliders className="w-3 h-3" />
+                    <span>{isCustomBonusMode ? 'Kembali ke Skema Otomatis' : 'Sesuaikan Bonus Manual (%)'}</span>
+                  </button>
+
+                  {isCustomBonusMode && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">Bonus Custom:</span>
+                      <div className="relative w-24">
+                        <input
+                          type="number"
+                          min="0"
+                          max="200"
+                          step="5"
+                          value={customBonusPercent}
+                          onChange={(e) => setCustomBonusPercent(Number(e.target.value) || 0)}
+                          className="w-full py-1 pl-2 pr-6 rounded-lg border border-emerald-500 text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none"
+                        />
+                        <span className="absolute inset-y-0 right-0 pr-2 flex items-center text-xs font-bold text-emerald-600">
+                          %
+                        </span>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-sm">
-                        Rp
-                      </div>
-                      <input
-                        type="number"
-                        id="input-custom-discount-nominal"
-                        min="0"
-                        max={safeTopupNominal}
-                        step="5000"
-                        value={customDiscountNominal || ''}
-                        onChange={(e) => setCustomDiscountNominal(Number(e.target.value) || 0)}
-                        placeholder="Contoh: 50.000"
-                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
@@ -568,47 +638,62 @@ export const AdCostCalculator: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5" />
-                  Rincian Pembayaran Top-Up
+                  Rincian Saldo Akun & Bonus
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                  Hemat {effectiveDiscountPercent}%
+                  Bonus Monetary +{effectiveBonusPercent}%
                 </span>
               </div>
 
-              {/* Big Output: Saldo yang Masuk Akun */}
+              {/* Big Output: Total Saldo yang Masuk Akun */}
               <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-slate-700 shadow-xs">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">
                   Total Saldo MyAds yang Masuk ke Akun Anda:
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
-                    Rp {safeTopupNominal.toLocaleString('id-ID')}
+                    Rp {totalSaldoDiterima.toLocaleString('id-ID')}
                   </span>
                 </div>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">
-                  ≈ Dapat menjangkau hingga <strong>{approxSmsReach.toLocaleString('id-ID')}</strong> target penerima iklan
+                <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-[11px]">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Saldo Utama: <strong>Rp {saldoUtama.toLocaleString('id-ID')}</strong>
+                  </span>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    Bonus Monetary: <strong>+Rp {bonusMonetary.toLocaleString('id-ID')}</strong>
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 block">
+                  ≈ Dapat menjangkau hingga <strong>{approxSmsReachTotal.toLocaleString('id-ID')}</strong> target penerima iklan (termasuk <strong>{approxSmsReachBonusOnly.toLocaleString('id-ID')}</strong> pesan ekstra gratis dari bonus).
                 </span>
               </div>
 
               {/* Breakdown List */}
               <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 border-t border-b border-slate-200/80 dark:border-slate-700 py-3">
                 <div className="flex justify-between items-center">
-                  <span>Nominal Saldo Dipilih:</span>
+                  <span>Nominal Top-Up (Yang Ditransfer):</span>
+                  <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                    Rp {totalYangDitransfer.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Saldo Utama Diterima (100%):</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    Rp {safeTopupNominal.toLocaleString('id-ID')}
+                    Rp {saldoUtama.toLocaleString('id-ID')}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold">
                   <span className="flex items-center gap-1">
-                    <Tag className="w-3 h-3" />
-                    Potongan Diskon ({effectiveDiscountPercent}%):
+                    <Gift className="w-3 h-3" />
+                    Bonus Monetary ({effectiveBonusPercent}%):
                   </span>
-                  <span>- Rp {topupSavings.toLocaleString('id-ID')}</span>
+                  <span>+ Rp {bonusMonetary.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm font-extrabold text-slate-900 dark:text-white pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-                  <span>Total Yang Harus Ditransfer:</span>
+                  <span>Total Saldo Akhir di Akun:</span>
                   <span className="text-emerald-600 dark:text-emerald-400 text-lg">
-                    Rp {topupFinalPay.toLocaleString('id-ID')}
+                    Rp {totalSaldoDiterima.toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
@@ -617,11 +702,12 @@ export const AdCostCalculator: React.FC = () => {
               <div className="p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs space-y-1.5 text-slate-700 dark:text-slate-300">
                 <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Keuntungan Isi Ulang Saldo:</span>
+                  <span>Keuntungan Top-Up Saldo & Bonus Monetary:</span>
                 </div>
                 <ul className="text-[11px] space-y-1 text-slate-600 dark:text-slate-400 list-disc list-inside">
-                  <li>Bisa digunakan lintas saluran (SMS LBA, Broadcast, Targeted, MMS).</li>
-                  <li>Potongan diskon Rp {topupSavings.toLocaleString('id-ID')} langsung berlaku saat transfer.</li>
+                  <li>Saldo utama 100% utuh tanpa potongan administrasi apapun.</li>
+                  <li>Bonus monetary sebesar Rp {bonusMonetary.toLocaleString('id-ID')} langsung ditambahkan ke akun MyAds.</li>
+                  <li>Bisa digunakan lintas saluran (SMS LBA, Broadcast, Targeted, MMS, USSD, WA WABA).</li>
                 </ul>
               </div>
 
@@ -632,7 +718,7 @@ export const AdCostCalculator: React.FC = () => {
                 className="w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow transition-all flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Ajukan Top-Up Saldo Diskon {effectiveDiscountPercent}% via WhatsApp</span>
+                <span>Ajukan Top-Up Saldo + Bonus {effectiveBonusPercent}% via WhatsApp</span>
               </button>
             </div>
           </div>

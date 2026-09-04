@@ -593,7 +593,7 @@ export const AdminApp: React.FC = () => {
             >
               <Percent className="w-4 h-4 shrink-0" />
               <div className="flex-1">
-                <span>Diskon Isi Ulang</span>
+                <span>Bonus Saldo</span>
                 <span className="hidden md:inline-block ml-1 opacity-75 text-[10px]">
                   ({draftData.discountConfig.reloadDiscountPercent}%)
                 </span>
@@ -901,19 +901,19 @@ export const AdminApp: React.FC = () => {
               <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
                 <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
                   <Percent className="w-5 h-5" />
-                  <span>Pengaturan Diskon Saldo Isi Ulang & Banner Promo</span>
+                  <span>Pengaturan Bonus Saldo Isi Ulang & Banner Promo</span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Ubah persentase diskon isi ulang yang otomatis terhitung di kalkulator biaya iklan, matriks tabel, dan pesan WhatsApp.
+                  Ubah persentase bonus saldo top-up yang otomatis terhitung di banner promo, kalkulator top-up, dan pesan WhatsApp.
                 </p>
 
                 <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-900 dark:text-white">
-                      Persentase Diskon Top-Up Saldo (%):
+                      Persentase Bonus Top-Up Saldo (%):
                     </label>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Misal: 3% akan otomatis memotong total biaya saat pengiklan melakukan top-up.
+                      Misal: 50% akan otomatis menambahkan saldo ekstra monetary saat pengiklan melakukan top-up.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

@@ -222,7 +222,7 @@ export const PackageCards: React.FC = () => {
                         {pkg.description}
                       </p>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-                        <p>• Diskon top-up saldo berlaku otomatis ({data.discountConfig.reloadDiscountPercent}%)</p>
+                        <p>• Bonus top-up saldo berlaku otomatis (s/d {data.discountConfig.reloadDiscountPercent}%)</p>
                         <p>• Pelaporan impresi/delivery rate transparan</p>
                         <p>• Pendampingan setup target audiens</p>
                       </div>

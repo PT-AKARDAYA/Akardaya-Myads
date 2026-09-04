@@ -94,7 +94,7 @@ export const OrderModal: React.FC = () => {
       `📦 *Paket Pilihan:* ${currentPkg ? currentPkg.name + ' (' + currentPkg.priceDisplay + ')' : 'Konsultasi Custom'}\n` +
       `📍 *Target Lokasi/Kota:* ${targetCityOrArea.trim() || 'Nasional / Seluruh Indonesia'}\n` +
       `💰 *Estimasi Budget:* ${estimatedBudget || currentPkg?.priceDisplay}\n` +
-      `🎁 *Diskon Top-up:* ${discountConfig.reloadDiscountPercent}%\n` +
+      `🎁 *Bonus Top-up Saldo:* s/d ${discountConfig.reloadDiscountPercent}%\n` +
       (notes.trim() ? `📝 *Kebutuhan/Catatan:* ${notes.trim()}\n\n` : '\n') +
       `Mohon dibantu proses setup dan penjelasannya. Terima kasih!`;
 
@@ -148,7 +148,7 @@ export const OrderModal: React.FC = () => {
               </span>
             </div>
             <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[10px] shrink-0">
-              Diskon {discountConfig.reloadDiscountPercent}%
+              Bonus Saldo {discountConfig.reloadDiscountPercent}%
             </span>
           </div>
         )}

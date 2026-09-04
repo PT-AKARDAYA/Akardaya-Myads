@@ -745,10 +745,10 @@ function doOptions(e) {
     },
     {
       name: 'DISKON_ISI_ULANG',
-      label: 'Diskon Isi Ulang',
+      label: 'Bonus Saldo Isi Ulang',
       icon: Percent,
       color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800',
-      desc: 'Persentase diskon top-up saldo (2%), judul promo, badge, dan tanggal countdown.',
+      desc: 'Persentase bonus saldo top-up (s/d 50%), judul promo, badge, dan tanggal countdown.',
     },
     {
       name: 'TARIF_SALURAN_IKLAN',

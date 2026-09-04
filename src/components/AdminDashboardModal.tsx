@@ -348,7 +348,7 @@ export const AdminDashboardModal: React.FC = () => {
             }`}
           >
             <Percent className="w-3.5 h-3.5" />
-            <span>Diskon Isi Ulang ({draftData.discountConfig.reloadDiscountPercent}%)</span>
+            <span>Bonus Saldo ({draftData.discountConfig.reloadDiscountPercent}%)</span>
           </button>
 
           <button
@@ -582,22 +582,22 @@ export const AdminDashboardModal: React.FC = () => {
               <div className="p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-850 shadow-sm space-y-4">
                 <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-sm">
                   <Percent className="w-5 h-5" />
-                  <span>Pengaturan Diskon Saldo Isi Ulang</span>
+                  <span>Pengaturan Bonus Saldo Isi Ulang</span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Ubah persentase diskon top-up yang berlaku di kalkulator, matriks paket, dan formulir pemesanan.
+                  Ubah persentase bonus saldo top-up yang berlaku di banner promo, kalkulator, dan formulir pemesanan.
                 </p>
 
                 <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900">
                   <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">
-                    Persentase Diskon Isi Ulang (%):
+                    Persentase Bonus Saldo Isi Ulang (%):
                   </label>
                   <div className="flex items-center gap-3">
                     <input
                       id="input-admin-discount-percent"
                       type="number"
                       min="0"
-                      max="50"
+                      max="100"
                       value={draftData.discountConfig.reloadDiscountPercent}
                       onChange={(e) =>
                         setDraftData((prev) => ({
@@ -611,7 +611,7 @@ export const AdminDashboardModal: React.FC = () => {
                       className="w-24 px-3 py-2 text-lg font-black text-center rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400"
                     />
                     <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                      % OFF untuk Setiap Top-Up Saldo Iklan
+                      % Bonus Monetary untuk Setiap Top-Up Saldo Iklan
                     </span>
                   </div>
                 </div>
