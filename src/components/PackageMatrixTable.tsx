@@ -9,12 +9,32 @@ import {
   Layers,
   Send,
   HelpCircle,
+  Smartphone,
+  CheckCircle2,
+  XCircle,
+  SlidersHorizontal,
+  Globe,
+  Palette,
+  UserCheck,
 } from 'lucide-react';
 
 export const PackageMatrixTable: React.FC = () => {
   const { data, openOrderModalForPackage } = useApp();
   const { discountConfig } = data;
   const [searchFilter, setSearchFilter] = useState('');
+  const [mobileMode, setMobileMode] = useState<'card' | 'table'>('card');
+  const [selectedMobileTier, setSelectedMobileTier] = useState<string>('one_3');
+
+  const mobileTiers = [
+    { key: 'one_3', name: 'One Klik (>501k)', label: 'One Klik >501k', sub: 'Terpopuler + Free Web', isPopular: true },
+    { key: 'one_2', name: 'One Klik (201-500k)', label: 'One Klik 201-500k', sub: 'Terima Jadi' },
+    { key: 'one_1', name: 'One Klik (<200k)', label: 'One Klik <200k', sub: 'Hemat Starter' },
+    { key: 'man_3', name: 'Mandiri (>501k)', label: 'Mandiri >501k', sub: 'Kelola Bebas + Free Web' },
+    { key: 'man_2', name: 'Mandiri (201-500k)', label: 'Mandiri 201-500k', sub: 'Kelola Mandiri' },
+    { key: 'man_1', name: 'Mandiri (<200k)', label: 'Mandiri <200k', sub: 'Starter Mandiri' },
+    { key: 'umkm', name: 'Paket UMKM (>500k)', label: 'UMKM >500k', sub: 'Free Web & Konten' },
+    { key: 'corp', name: 'Corporate (>1 Jt)', label: 'Corporate >1 Jt', sub: 'Fasilitas Prioritas' },
+  ];
 
   const rows = [
     // SMS
@@ -374,8 +394,169 @@ export const PackageMatrixTable: React.FC = () => {
           </div>
         </div>
 
-        {/* Scroll Helper Notice on Mobile */}
-        <div className="lg:hidden flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs">
+        {/* Mobile View Switcher (Visible on mobile screens) */}
+        <div className="lg:hidden flex items-center justify-between p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-4 text-xs font-semibold">
+          <button
+            onClick={() => setMobileMode('card')}
+            className={`flex-1 py-2.5 rounded-lg text-center transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
+              mobileMode === 'card'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Mode HP (Cek Fitur)</span>
+          </button>
+          <button
+            onClick={() => setMobileMode('table')}
+            className={`flex-1 py-2.5 rounded-lg text-center transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
+              mobileMode === 'table'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <TableIcon className="w-3.5 h-3.5" />
+            <span>Tabel Lengkap (Geser)</span>
+          </button>
+        </div>
+
+        {/* MOBILE MODE 1: INTERACTIVE CARD VIEW */}
+        {mobileMode === 'card' && (
+          <div className="lg:hidden space-y-4 mb-6">
+            {/* Horizontal Scrolling Tier Selector Chips */}
+            <div>
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                <SlidersHorizontal className="w-3 h-3 text-blue-500" />
+                Pilih Paket untuk Cek Detail Fasilitas:
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar -mx-4 px-4">
+                {mobileTiers.map((tier) => {
+                  const isSelected = selectedMobileTier === tier.key;
+                  return (
+                    <button
+                      key={tier.key}
+                      onClick={() => setSelectedMobileTier(tier.key)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all flex items-center gap-1 active:scale-95 ${
+                        isSelected
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/20'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {tier.isPopular && <Sparkles className="w-3 h-3 text-amber-300" />}
+                      <span>{tier.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Detailed Mobile Specs Card for Selected Tier */}
+            {(() => {
+              const currentTierObj = mobileTiers.find((t) => t.key === selectedMobileTier) || mobileTiers[0];
+              const tierKey = selectedMobileTier as keyof typeof rows[0];
+
+              return (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 p-4 sm:p-5 shadow-sm space-y-4">
+                  {/* Header of the Selected Tier Card */}
+                  <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                          Matriks Fasilitas
+                        </span>
+                        {currentTierObj.isPopular && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-white">
+                            Paling Diminati
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white leading-tight mt-0.5">
+                        {currentTierObj.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{currentTierObj.sub}</p>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-black border border-emerald-200 dark:border-emerald-800">
+                        Bonus Saldo {discountConfig.reloadDiscountPercent}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* List of Features for this Tier */}
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      Daftar Saluran & Fasilitas:
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {filteredRows.map((row, rIdx) => {
+                        const val = row[tierKey];
+                        const isIncluded = val === true;
+                        const isCustomText = typeof val === 'string' && val !== '-';
+                        const isExcluded = val === false || val === '-';
+
+                        return (
+                          <div
+                            key={rIdx}
+                            className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs"
+                          >
+                            <div className="min-w-0 pr-2">
+                              <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">
+                                {row.facility}
+                              </span>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
+                                {row.feature}
+                              </span>
+                            </div>
+
+                            <div className="shrink-0">
+                              {isIncluded && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
+                                  <span>Tersedia</span>
+                                </span>
+                              )}
+
+                              {isCustomText && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[11px] font-extrabold border border-blue-200 dark:border-blue-800">
+                                  {val.includes('FREE') ? <Globe className="w-3 h-3 text-emerald-500" /> : null}
+                                  {val.includes('KONTEN') ? <Palette className="w-3 h-3 text-blue-500" /> : null}
+                                  {val.includes('AKUN') ? <UserCheck className="w-3 h-3 text-indigo-500" /> : null}
+                                  <span>{val}</span>
+                                </span>
+                              )}
+
+                              {isExcluded && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-700/60 text-slate-400 text-[11px] font-semibold">
+                                  <span>-</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Direct Order Button */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => openOrderModalForPackage(null)}
+                      className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 active:scale-[0.98] min-h-[44px]"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Pesan / Konsultasi {currentTierObj.name}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Scroll Helper Notice on Mobile (Shown only when in full table mode) */}
+        <div className={`lg:hidden flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs ${mobileMode === 'table' ? 'flex' : 'hidden'}`}>
           <span className="flex items-center gap-1 font-medium">
             <Info className="w-3.5 h-3.5" />
             Geser tabel ke kanan untuk melihat semua kolom paket & diskon
@@ -383,8 +564,8 @@ export const PackageMatrixTable: React.FC = () => {
           <span className="text-[10px] font-bold uppercase tracking-wider">Scroll ➔</span>
         </div>
 
-        {/* Matrix Table Container */}
-        <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 shadow-md overflow-hidden">
+        {/* Matrix Table Container - Always visible on desktop, toggleable on mobile */}
+        <div className={`relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 shadow-md overflow-hidden ${mobileMode === 'table' ? 'block' : 'hidden lg:block'}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[950px]">
               <thead>

@@ -23,24 +23,46 @@ export const safeNormalizeData = (incoming: any): AppData => {
     ...rawDiscountConfig,
   };
 
+  // Ensure default monetaryTiers exist if not present in saved data
+  if (!safeDiscountConfig.monetaryTiers || !Array.isArray(safeDiscountConfig.monetaryTiers)) {
+    safeDiscountConfig.monetaryTiers = INITIAL_APP_DATA.discountConfig.monetaryTiers;
+  }
+
   // Ensure "Promo Diskon Saldo" is migrated to "Promo Bonus Saldo" seamlessly
-  if (safeDiscountConfig.promoTitle && /diskon saldo/i.test(safeDiscountConfig.promoTitle)) {
-    safeDiscountConfig.promoTitle = safeDiscountConfig.promoTitle.replace(/diskon saldo/gi, 'Bonus Saldo');
+  if (safeDiscountConfig.promoTitle) {
+    safeDiscountConfig.promoTitle = safeDiscountConfig.promoTitle
+      .replace(/diskon saldo/gi, 'Bonus Saldo')
+      .replace(/1%\s*-\s*50%/gi, 's/d 50%');
   }
   if (safeDiscountConfig.promoBadge && /diskon/i.test(safeDiscountConfig.promoBadge)) {
     safeDiscountConfig.promoBadge = safeDiscountConfig.promoBadge.replace(/diskon/gi, 'Bonus');
   }
-  if (safeDiscountConfig.promoDescription && /potongan langsung/i.test(safeDiscountConfig.promoDescription)) {
-    safeDiscountConfig.promoDescription = 'Dapatkan bonus saldo monetary langsung (atau sesuai setting admin) setiap top-up saldo My Ads untuk semua channel promosi!';
+  if (safeDiscountConfig.promoDescription) {
+    safeDiscountConfig.promoDescription = safeDiscountConfig.promoDescription
+      .replace(/\s*\(atau sesuai setting admin\)/gi, '')
+      .replace(/potongan langsung/gi, 'bonus saldo monetary langsung');
+  }
+  if (safeDiscountConfig.isPromoActive === undefined) {
+    safeDiscountConfig.isPromoActive = true;
   }
 
+  const rawCompany = incoming.companyConfig && typeof incoming.companyConfig === 'object' ? incoming.companyConfig : {};
   const safeCompanyConfig: CompanyConfig = {
     ...INITIAL_APP_DATA.companyConfig,
-    ...(incoming.companyConfig && typeof incoming.companyConfig === 'object' ? incoming.companyConfig : {}),
-    spreadsheetUrl: incoming.companyConfig?.spreadsheetUrl || PERMANENT_GAS_URL,
+    ...rawCompany,
+    brandName: rawCompany.brandName || INITIAL_APP_DATA.companyConfig.brandName,
+    waNumber: rawCompany.waNumber ? String(rawCompany.waNumber).replace(/\D/g, '') : INITIAL_APP_DATA.companyConfig.waNumber,
+    waDisplayNumber: rawCompany.waDisplayNumber || (rawCompany.waNumber ? `+${rawCompany.waNumber}` : INITIAL_APP_DATA.companyConfig.waDisplayNumber),
+    brandTagline: rawCompany.brandTagline !== undefined && rawCompany.brandTagline !== '' ? rawCompany.brandTagline : INITIAL_APP_DATA.companyConfig.brandTagline,
+    supportEmail: rawCompany.supportEmail || INITIAL_APP_DATA.companyConfig.supportEmail,
+    officeAddress: rawCompany.officeAddress || INITIAL_APP_DATA.companyConfig.officeAddress,
+    operatingHours: rawCompany.operatingHours || INITIAL_APP_DATA.companyConfig.operatingHours,
+    announcementText: rawCompany.announcementText !== undefined && rawCompany.announcementText !== null ? rawCompany.announcementText : INITIAL_APP_DATA.companyConfig.announcementText,
+    showAnnouncement: rawCompany.showAnnouncement !== undefined ? Boolean(rawCompany.showAnnouncement) : INITIAL_APP_DATA.companyConfig.showAnnouncement,
+    spreadsheetUrl: rawCompany.spreadsheetUrl || PERMANENT_GAS_URL,
   };
 
-  const safeOffices = Array.isArray(incoming.offices) && incoming.offices.length > 0
+  const safeOffices = Array.isArray(incoming.offices)
     ? incoming.offices
     : DEFAULT_OFFICE_LOCATIONS;
 
@@ -174,7 +196,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isSyncingRef.current = true;
 
     try {
-      // 1. Check Google Spreadsheet first if URL is configured
+      // 1. First attempt full-stack sync via server bridge (Node.js fetch to GAS, avoids CORS limitations)
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const sRes = await fetch(`/api/sync-gsheet?_t=${Date.now()}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (sRes.ok) {
+          const sJson = await sRes.json();
+          if (sJson && sJson.data && sJson.data.packages) {
+            const remoteData = safeNormalizeData(sJson.data);
+            const currentStr = JSON.stringify(dataRef.current);
+            const remoteStr = JSON.stringify(remoteData);
+
+            if (currentStr !== remoteStr) {
+              lastSyncTimestampRef.current = remoteData.lastUpdated || '';
+              dataRef.current = remoteData;
+              setData(remoteData);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('akardaya_app_data', remoteStr);
+              }
+              if (!silent) {
+                showToast('✨ Seluruh menu admin berhasil disinkronkan dari Google Sheets', 'success');
+              }
+            } else if (!silent) {
+              showToast('✨ Data semua menu sudah sinkron dengan Google Spreadsheet', 'info');
+            }
+            setIsLoading(false);
+            isSyncingRef.current = false;
+            return;
+          }
+        }
+      } catch (srvErr) {
+        // Fallback to direct client fetch
+      }
+
+      // 2. Direct browser fetch to Google Spreadsheet Web App
       const currentData = dataRef.current;
       const savedStorageUrl = typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null;
       const spreadsheetUrl = currentData?.companyConfig?.spreadsheetUrl || savedStorageUrl || PERMANENT_GAS_URL;
@@ -186,7 +243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             : `${spreadsheetUrl}?action=GET_DATA&_t=${Date.now()}`;
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
           const sheetRes = await fetch(fetchUrl, { signal: controller.signal });
           clearTimeout(timeoutId);
           if (sheetRes.ok) {

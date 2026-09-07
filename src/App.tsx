@@ -95,7 +95,7 @@ const MainLayout: React.FC = () => {
       <Toast />
       <Navbar />
 
-      <main>
+      <main className="pb-28 md:pb-0">
         {/* Above the fold: Loaded instantly */}
         <HeroPromo />
         <PackageCards />

@@ -105,13 +105,18 @@ export const OrderModal: React.FC = () => {
   return (
     <div
       id="modal-order-consultation"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
     >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl animate-in zoom-in-95">
+      <div className="w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95">
+        {/* Mobile Drag Indicator Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 flex justify-center">
+          <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
+        </div>
+
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 shrink-0">
               <PhoneCall className="w-5 h-5" />
             </div>
             <div>
@@ -126,7 +131,7 @@ export const OrderModal: React.FC = () => {
           <button
             id="btn-close-order-modal"
             onClick={() => setIsOrderModalOpen(false)}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95"
           >
             <X className="w-5 h-5" />
           </button>
@@ -154,7 +159,7 @@ export const OrderModal: React.FC = () => {
         )}
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5 pb-8 sm:pb-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -166,7 +171,7 @@ export const OrderModal: React.FC = () => {
                 placeholder="Contoh: Rian Pratama"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
             <div>
@@ -179,7 +184,7 @@ export const OrderModal: React.FC = () => {
                 placeholder="Contoh: 08123456789"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
           </div>
@@ -194,7 +199,7 @@ export const OrderModal: React.FC = () => {
                 placeholder="Contoh: Toko Berkah Jaya"
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
             <div>
@@ -206,7 +211,7 @@ export const OrderModal: React.FC = () => {
                 placeholder="Contoh: Surabaya Timur (Radius 2km)"
                 value={targetCityOrArea}
                 onChange={(e) => setTargetCityOrArea(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
           </div>
@@ -222,7 +227,7 @@ export const OrderModal: React.FC = () => {
                 const found = packages.find((p) => p.id === e.target.value);
                 if (found) setEstimatedBudget(found.priceDisplay);
               }}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
+              className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
             >
               {packages.map((pkg) => (
                 <option key={pkg.id} value={pkg.id}>
@@ -241,7 +246,7 @@ export const OrderModal: React.FC = () => {
               placeholder="Contoh: Ingin promosi grand opening hari Sabtu ini, target ibu-ibu dan pekerja kantor..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+              className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
             ></textarea>
           </div>
 
@@ -250,7 +255,7 @@ export const OrderModal: React.FC = () => {
               id="btn-submit-order-lead"
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3.5 px-4 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-md hover:shadow transition-all flex items-center justify-center gap-2 disabled:opacity-50 min-h-[48px]"
             >
               <Send className="w-4 h-4" />
               <span>{isSubmitting ? 'Menyiapkan...' : 'Lanjutkan ke Chat WhatsApp Admin'}</span>

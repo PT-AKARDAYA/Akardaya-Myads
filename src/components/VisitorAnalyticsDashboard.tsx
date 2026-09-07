@@ -25,7 +25,6 @@ import {
 import {
   getLocalAnalyticsSummary,
   clearLocalAnalytics,
-  trackRealVisitor,
   calculateAnalyticsSummaryFromLogs,
   fetchRemoteAnalyticsFromSpreadsheet,
   VisitorRecord,
@@ -131,13 +130,6 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const conversionRate = totalPageViews > 0 ? ((ordersCount / totalPageViews) * 100).toFixed(1) : '0.0';
   const maxChartCount = Math.max(...dailyCounts.map((d) => d.count), 5);
 
-  const handleManualPing = () => {
-    trackRealVisitor(window.location.pathname || '/', 'pageview', data?.companyConfig?.spreadsheetUrl);
-    setTimeout(() => {
-      refreshAnalyticsData();
-    }, 800);
-  };
-
   const handleClearLogs = () => {
     if (window.confirm('Hapus seluruh riwayat log kunjungan lokal di browser ini? (Data di Google Spreadsheet tetap tersimpan)')) {
       clearLocalAnalytics();
@@ -188,15 +180,6 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={handleManualPing}
-            className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs"
-            title="Uji pencatatan sesi kunjungan Anda saat ini ke Google Spreadsheet"
-          >
-            <Radio className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
-            <span>Tes Ping Kunjungan</span>
-          </button>
-
           <button
             onClick={refreshAnalyticsData}
             disabled={isLoading}

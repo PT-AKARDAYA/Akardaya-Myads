@@ -36,8 +36,17 @@ export interface SubscriptionPackage {
   keyHighlights: string[];
 }
 
+export interface MonetaryTier {
+  id: string;
+  minAmount: number; // minimum amount to qualify for this tier
+  maxAmount: number | null; // maximum amount to qualify, null means no limit
+  label: string; // e.g., "<=500.000" or ">=1.000.000"
+  bonusPercent: number; // e.g., 30 for 30%
+}
+
 export interface DiscountConfig {
-  reloadDiscountPercent: number; // default 3% (Misal 3% bisa di setting)
+  reloadDiscountPercent: string | number; // e.g., 50 or "0% - 50%" (Legacy/Deprecated, keeping for compatibility)
+  monetaryTiers?: MonetaryTier[]; // The configurable bonus schema
   isPromoActive: boolean;
   promoTitle: string;
   promoBadge: string;

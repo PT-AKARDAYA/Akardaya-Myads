@@ -35,6 +35,73 @@ function saveDataToDisk() {
   }
 }
 
+const PERMANENT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec';
+
+async function syncWithGoogleSheet(): Promise<AppData | null> {
+  const gasUrl = appData?.companyConfig?.spreadsheetUrl || PERMANENT_GAS_URL;
+  if (!gasUrl || !gasUrl.startsWith('https://script.google.com/')) return null;
+
+  try {
+    const fetchUrl = gasUrl.includes('?') 
+      ? `${gasUrl}&action=GET_DATA&_t=${Date.now()}` 
+      : `${gasUrl}?action=GET_DATA&_t=${Date.now()}`;
+
+    const res = await fetch(fetchUrl, {
+      headers: { 'User-Agent': 'Akardaya-Sync-Server/1.0' },
+      redirect: 'follow',
+    });
+
+    if (res.ok) {
+      const json: any = await res.json();
+      if (json && json.status === 'success' && json.data) {
+        const d = json.data;
+        appData = {
+          ...appData,
+          packages: Array.isArray(d.packages) && d.packages.length > 0 ? d.packages : appData.packages,
+          channelRates: Array.isArray(d.channelRates) && d.channelRates.length > 0 ? d.channelRates : appData.channelRates,
+          discountConfig: d.discountConfig ? { ...appData.discountConfig, ...d.discountConfig } : appData.discountConfig,
+          companyConfig: d.companyConfig ? { ...appData.companyConfig, ...d.companyConfig } : appData.companyConfig,
+          offices: Array.isArray(d.offices) ? d.offices : (appData.offices || []),
+          testimonials: Array.isArray(d.testimonials) ? d.testimonials : appData.testimonials,
+          orders: Array.isArray(d.orders) ? d.orders : appData.orders,
+          lastUpdated: new Date().toISOString(),
+        };
+        saveDataToDisk();
+        console.log('✅ Google Sheets sync completed successfully');
+        return appData;
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Server sync with Google Sheet failed:', err);
+  }
+  return null;
+}
+
+async function forwardSaveToGoogleSheet(dataToSave: AppData): Promise<boolean> {
+  const gasUrl = dataToSave?.companyConfig?.spreadsheetUrl || appData?.companyConfig?.spreadsheetUrl || PERMANENT_GAS_URL;
+  if (!gasUrl || !gasUrl.startsWith('https://script.google.com/')) return false;
+
+  try {
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'SAVE_DATA',
+        payload: dataToSave,
+      }),
+      redirect: 'follow',
+    });
+    if (res.ok) {
+      const text = await res.text();
+      console.log('✅ Changes successfully saved and synced to Google Sheets:', text.substring(0, 120));
+      return true;
+    }
+  } catch (err) {
+    console.warn('⚠️ Forwarding save to Google Sheet error:', err);
+  }
+  return false;
+}
+
 async function startServer() {
   const app = express();
   const server = http.createServer(app);
@@ -225,8 +292,37 @@ async function startServer() {
     res.json(appData);
   });
 
+  // Dedicated endpoint to pull latest data from Google Sheets
+  app.get('/api/sync-gsheet', async (req, res) => {
+    const synced = await syncWithGoogleSheet();
+    if (synced) {
+      broadcast({
+        type: 'SYNC_DATA',
+        payload: appData,
+        timestamp: new Date().toISOString(),
+      });
+      res.json({ success: true, message: 'Data berhasil disinkronkan dari Google Sheets', data: appData });
+    } else {
+      res.json({ success: false, message: 'Menggunakan data lokal', data: appData });
+    }
+  });
+
+  app.post('/api/sync-gsheet', async (req, res) => {
+    const synced = await syncWithGoogleSheet();
+    if (synced) {
+      broadcast({
+        type: 'SYNC_DATA',
+        payload: appData,
+        timestamp: new Date().toISOString(),
+      });
+      res.json({ success: true, message: 'Data berhasil disinkronkan dari Google Sheets', data: appData });
+    } else {
+      res.json({ success: false, message: 'Menggunakan data lokal', data: appData });
+    }
+  });
+
   // Update full app state (from Admin Dashboard)
-  app.post('/api/data', (req, res) => {
+  app.post('/api/data', async (req, res) => {
     try {
       const incomingData = req.body as Partial<AppData>;
       appData = {
@@ -242,6 +338,9 @@ async function startServer() {
         payload: appData,
         timestamp: new Date().toISOString(),
       });
+
+      // Synchronize and write changes directly to Google Sheets Web App
+      forwardSaveToGoogleSheet(appData);
 
       res.json({ success: true, data: appData });
     } catch (err: any) {
@@ -389,6 +488,10 @@ async function startServer() {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
     console.log(`🔌 WebSocket Server initialized on port ${PORT}`);
+    // Warm up and sync directly from Google Spreadsheet
+    syncWithGoogleSheet().then(() => {
+      console.log('Initial Google Sheets sync completed on server boot');
+    });
   });
 }
 

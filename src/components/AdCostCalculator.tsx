@@ -61,50 +61,31 @@ export const AdCostCalculator: React.FC = () => {
   // 2. STATE & LOGIC: KALKULASI TOPUP SALDO & BONUS MONETARY (SESUAI TABEL)
   // ==========================================
   const [topupNominal, setTopupNominal] = useState<number>(1000000);
-  const [isCustomBonusMode, setIsCustomBonusMode] = useState<boolean>(false);
-  const [customBonusPercent, setCustomBonusPercent] = useState<number>(50);
 
-  // Tabel Skema Bonus Monetary sesuai data tabel resmi:
-  // <=500.000           : 0%
-  // 500.000 - 1.000.000 : 30%
-  // >=1.000.000         : 50%
-  const MONETARY_TIERS = [
-    {
-      id: 'tier-0',
-      label: '<=500.000',
-      nominalDisplay: '<= Rp 500.000',
-      bonusPercent: 0,
-      description: 'Saldo utama utuh, tanpa bonus monetary',
-    },
-    {
-      id: 'tier-30',
-      label: '500.000 - 1.000.000',
-      nominalDisplay: 'Rp 500.000 - 1.000.000',
-      bonusPercent: 30,
-      description: 'Mendapatkan ekstra bonus saldo monetary +30%',
-    },
-    {
-      id: 'tier-50',
-      label: '>=1.000.000',
-      nominalDisplay: '>= Rp 1.000.000',
-      bonusPercent: 50,
-      description: 'Mendapatkan ekstra bonus saldo monetary maksimal +50%',
-    },
-  ];
+  // Tabel Skema Bonus Monetary dari database/settings
+  const MONETARY_TIERS = data.discountConfig.monetaryTiers || [];
 
   // Tentukan tier aktif berdasarkan nominal
   const getActiveTier = (amount: number) => {
-    if (amount >= 1000000) return MONETARY_TIERS[2];
-    if (amount >= 500000) return MONETARY_TIERS[1];
-    return MONETARY_TIERS[0];
+    // Cari tier yang sesuai dengan nominal (dari yang terbesar atau sesuai rentang)
+    // Asumsi: data sudah diurutkan atau kita cari dari yang paling spesifik
+    const matchedTier = MONETARY_TIERS.find(tier => {
+      const isAboveMin = amount >= tier.minAmount;
+      const isBelowMax = tier.maxAmount === null || amount <= tier.maxAmount;
+      return isAboveMin && isBelowMax;
+    });
+
+    return matchedTier || MONETARY_TIERS[0] || {
+      id: 'default',
+      label: 'Default',
+      bonusPercent: 0,
+    };
   };
 
   const currentTier = getActiveTier(topupNominal);
 
   // Persentase bonus monetary efektif
-  const effectiveBonusPercent = isCustomBonusMode
-    ? Math.max(0, Math.min(200, Number(customBonusPercent) || 0))
-    : currentTier.bonusPercent;
+  const effectiveBonusPercent = currentTier.bonusPercent;
 
   // Safe nominal
   const safeTopupNominal = Math.max(50000, Number(topupNominal) || 0);
@@ -320,6 +301,35 @@ export const AdCostCalculator: React.FC = () => {
                     <span>Rp 2.500.000</span>
                     <span>Rp 5.000.000+</span>
                   </div>
+
+                  {/* Quick Budget Chips */}
+                  <div className="pt-1">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1 font-medium">
+                      Pilihan Cepat Anggaran:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: '200 Rb', val: 200000 },
+                        { label: '500 Rb', val: 500000 },
+                        { label: '1 Juta', val: 1000000 },
+                        { label: '2.5 Juta', val: 2500000 },
+                        { label: '5 Juta', val: 5000000 },
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() => setBudgetInput(item.val)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
+                            budgetInput === item.val
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -343,6 +353,35 @@ export const AdCostCalculator: React.FC = () => {
                     <span>500 nomor</span>
                     <span>15.000 nomor</span>
                     <span>30.000+</span>
+                  </div>
+
+                  {/* Quick Reach Chips */}
+                  <div className="pt-1">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1 font-medium">
+                      Pilihan Cepat Target Nomor:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: '1.000 No', val: 1000 },
+                        { label: '2.500 No', val: 2500 },
+                        { label: '5.000 No', val: 5000 },
+                        { label: '10.000 No', val: 10000 },
+                        { label: '25.000 No', val: 25000 },
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() => setReachInput(item.val)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
+                            reachInput === item.val
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -550,15 +589,17 @@ export const AdCostCalculator: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                       {MONETARY_TIERS.map((tier) => {
-                        const isSelected = !isCustomBonusMode && currentTier.id === tier.id;
+                        const isSelected = currentTier.id === tier.id;
                         return (
                           <tr
                             key={tier.id}
                             onClick={() => {
-                              setIsCustomBonusMode(false);
-                              if (tier.id === 'tier-0' && topupNominal > 500000) setTopupNominal(300000);
-                              else if (tier.id === 'tier-30' && (topupNominal < 500000 || topupNominal >= 1000000)) setTopupNominal(500000);
-                              else if (tier.id === 'tier-50' && topupNominal < 1000000) setTopupNominal(1000000);
+                              // Calculate a sensible nominal to fall into this tier if current is outside
+                              const isOutsideTier = topupNominal < tier.minAmount || (tier.maxAmount !== null && topupNominal > tier.maxAmount);
+                              if (isOutsideTier) {
+                                // Default to the minimum amount of the tier, or a logical number
+                                setTopupNominal(Math.max(tier.minAmount, 100000));
+                              }
                             }}
                             className={`cursor-pointer transition-colors ${
                               isSelected
@@ -599,37 +640,6 @@ export const AdCostCalculator: React.FC = () => {
                   </table>
                 </div>
 
-                {/* Custom Bonus Toggle (Optional if user needs manual adjustment) */}
-                <div className="pt-2 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomBonusMode(!isCustomBonusMode)}
-                    className="text-[11px] font-semibold text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1"
-                  >
-                    <Sliders className="w-3 h-3" />
-                    <span>{isCustomBonusMode ? 'Kembali ke Skema Otomatis' : 'Sesuaikan Bonus Manual (%)'}</span>
-                  </button>
-
-                  {isCustomBonusMode && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">Bonus Custom:</span>
-                      <div className="relative w-24">
-                        <input
-                          type="number"
-                          min="0"
-                          max="200"
-                          step="5"
-                          value={customBonusPercent}
-                          onChange={(e) => setCustomBonusPercent(Number(e.target.value) || 0)}
-                          className="w-full py-1 pl-2 pr-6 rounded-lg border border-emerald-500 text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none"
-                        />
-                        <span className="absolute inset-y-0 right-0 pr-2 flex items-center text-xs font-bold text-emerald-600">
-                          %
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 

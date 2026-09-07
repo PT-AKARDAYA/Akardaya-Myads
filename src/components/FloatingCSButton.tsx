@@ -15,7 +15,7 @@ export const FloatingCSButton: React.FC = () => {
   return (
     <div
       id="floating-cs-container"
-      className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex flex-col items-end pointer-events-auto"
+      className="hidden md:flex fixed bottom-6 right-6 z-40 flex-col items-end pointer-events-auto"
     >
       {/* Floating Interactive CS Card Popup */}
       <AnimatePresence>

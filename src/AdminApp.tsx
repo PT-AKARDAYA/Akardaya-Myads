@@ -23,6 +23,7 @@ import {
   Upload,
   AlertTriangle,
   Clock,
+  Award,
   Sparkles,
   ArrowLeft,
   Search,
@@ -39,6 +40,8 @@ import {
   Users,
   Activity,
   RefreshCw,
+  Sliders,
+  Edit3,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -907,87 +910,380 @@ export const AdminApp: React.FC = () => {
                   Ubah persentase bonus saldo top-up yang otomatis terhitung di banner promo, kalkulator top-up, dan pesan WhatsApp.
                 </p>
 
-                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
+                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <div className="flex flex-col gap-3">
                     <label className="block text-xs font-bold text-slate-900 dark:text-white">
-                      Persentase Bonus Top-Up Saldo (%):
+                      Tabel Skema Bonus Saldo Isi Ulang:
                     </label>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Misal: 50% akan otomatis menambahkan saldo ekstra monetary saat pengiklan melakukan top-up.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={draftData.discountConfig.reloadDiscountPercent}
-                      onChange={(e) =>
-                        setDraftData((prev) => ({
-                          ...prev,
-                          discountConfig: {
-                            ...prev.discountConfig,
-                            reloadDiscountPercent: Number(e.target.value) || 0,
-                          },
-                        }))
-                      }
-                      className="w-24 px-3 py-2 text-xl font-black text-center rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 focus:outline-none"
-                    />
-                    <span className="text-lg font-black text-slate-700 dark:text-slate-300">%</span>
+
+                    {/* Editable Table representation */}
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="bg-slate-900 text-white dark:bg-slate-950">
+                            <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px]">NOMINAL DISPLAY</th>
+                            <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px] text-center">MIN (RP)</th>
+                            <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px] text-center">MAX (RP)</th>
+                            <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px] text-center">BONUS (%)</th>
+                            <th className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-[11px] text-right">AKSI</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                          {(draftData.discountConfig.monetaryTiers || []).map((tier, index) => (
+                            <tr key={tier.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                              <td className="py-2 px-2">
+                                <input
+                                  type="text"
+                                  value={tier.label}
+                                  onChange={(e) => {
+                                    const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
+                                    newTiers[index].label = e.target.value;
+                                    setDraftData((prev) => ({
+                                      ...prev,
+                                      discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                                    }));
+                                  }}
+                                  className="w-full px-2 py-1.5 text-xs font-bold rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                                />
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <input
+                                  type="number"
+                                  value={tier.minAmount}
+                                  onChange={(e) => {
+                                    const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
+                                    newTiers[index].minAmount = Number(e.target.value);
+                                    setDraftData((prev) => ({
+                                      ...prev,
+                                      discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                                    }));
+                                  }}
+                                  className="w-24 px-2 py-1.5 text-xs text-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                                />
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    value={tier.maxAmount ?? ''}
+                                    placeholder="No limit"
+                                    onChange={(e) => {
+                                      const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
+                                      newTiers[index].maxAmount = e.target.value ? Number(e.target.value) : null;
+                                      setDraftData((prev) => ({
+                                        ...prev,
+                                        discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                                      }));
+                                    }}
+                                    className="w-24 px-2 py-1.5 text-xs text-center rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <input
+                                  type="number"
+                                  value={tier.bonusPercent}
+                                  onChange={(e) => {
+                                    const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
+                                    newTiers[index].bonusPercent = Number(e.target.value);
+                                    setDraftData((prev) => ({
+                                      ...prev,
+                                      discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                                    }));
+                                  }}
+                                  className="w-16 px-2 py-1.5 text-xs font-black text-center rounded border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300"
+                                />
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newTiers = (draftData.discountConfig.monetaryTiers || []).filter((_, i) => i !== index);
+                                    setDraftData((prev) => ({
+                                      ...prev,
+                                      discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                                    }));
+                                  }}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="p-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
+                            newTiers.push({
+                              id: `tier-${Date.now()}`,
+                              minAmount: 0,
+                              maxAmount: 1000000,
+                              label: 'New Tier',
+                              bonusPercent: 10,
+                            });
+                            setDraftData((prev) => ({
+                              ...prev,
+                              discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                            }));
+                          }}
+                          className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700"
+                        >
+                          <Plus className="w-4 h-4" /> Tambah Skema Baru
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Judul Promo Header / Banner:
+                <div className="space-y-4 pt-2 text-xs">
+                  {/* Status Banner Promo Aktif / Nonaktif */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                        Status Tampilan Kartu Promo di Beranda
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Aktifkan untuk menampilkan kartu promo bonus saldo ini di samping judul banner beranda.
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draftData.discountConfig.isPromoActive}
+                        onChange={(e) =>
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, isPromoActive: e.target.checked }
+                          }))
+                        }
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                     </label>
-                    <input
-                      type="text"
-                      value={draftData.discountConfig.promoTitle}
+                  </div>
+
+                  {/* Persentase Maksimum Bonus Saldo Top-Up */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                      Maksimum Bonus Saldo Top-Up (% Angka Utama di Kartu):
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={draftData.discountConfig.reloadDiscountPercent}
+                          onChange={(e) =>
+                            setDraftData((prev) => ({
+                              ...prev,
+                              discountConfig: { ...prev.discountConfig, reloadDiscountPercent: Number(e.target.value) || 0 }
+                            }))
+                          }
+                          className="w-24 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold text-sm"
+                        />
+                        <span className="text-xs font-bold text-slate-500">%</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const maxTierBonus = Math.max(
+                            ...(draftData.discountConfig.monetaryTiers || []).map((t) => Number(t.bonusPercent) || 0),
+                            0
+                          );
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: {
+                              ...prev.discountConfig,
+                              reloadDiscountPercent: maxTierBonus,
+                              promoTitle: prev.discountConfig.promoTitle.replace(/\d+%\s*-\s*\d+%/g, `s/d ${maxTierBonus}%`)
+                            }
+                          }));
+                        }}
+                        className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-200 transition-colors"
+                      >
+                        ⚡ Sinkronkan ke Tier Tertinggi ({Math.max(...(draftData.discountConfig.monetaryTiers || []).map((t) => Number(t.bonusPercent) || 0), 0)}%)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Batas Waktu Countdown Promo */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                      Batas Waktu Hitung Mundur (Countdown Timer):
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="datetime-local"
+                        value={draftData.discountConfig.promoCountdownEnd ? new Date(draftData.discountConfig.promoCountdownEnd).toISOString().slice(0, 16) : ''}
+                        onChange={(e) => {
+                          const val = e.target.value ? new Date(e.target.value).toISOString() : '';
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, promoCountdownEnd: val }
+                          }));
+                        }}
+                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, promoCountdownEnd: newDate }
+                          }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                      >
+                        +2 Hari
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, promoCountdownEnd: newDate }
+                          }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                      >
+                        +7 Hari
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, promoCountdownEnd: newDate }
+                          }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                      >
+                        +30 Hari
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Judul Promo Header / Banner:
+                      </label>
+                      <input
+                        type="text"
+                        value={draftData.discountConfig.promoTitle}
+                        onChange={(e) =>
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, promoTitle: e.target.value },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                        placeholder="Contoh: Promo Bonus Saldo Isi Ulang s/d 50%"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Teks Badge Promo:
+                      </label>
+                      <input
+                        type="text"
+                        value={draftData.discountConfig.promoBadge}
+                        onChange={(e) =>
+                          setDraftData((prev) => ({
+                            ...prev,
+                            discountConfig: { ...prev.discountConfig, promoBadge: e.target.value },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                        placeholder="Contoh: Spesial Bonus Saldo"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-xs">
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Deskripsi Detail Promo:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={draftData.discountConfig.promoDescription}
                       onChange={(e) =>
                         setDraftData((prev) => ({
                           ...prev,
-                          discountConfig: { ...prev.discountConfig, promoTitle: e.target.value },
+                          discountConfig: { ...prev.discountConfig, promoDescription: e.target.value },
                         }))
                       }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    />
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                      placeholder="Contoh: Dapatkan bonus saldo monetary langsung setiap top-up saldo My Ads untuk semua channel promosi!"
+                    ></textarea>
                   </div>
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Teks Badge Promo:
-                    </label>
-                    <input
-                      type="text"
-                      value={draftData.discountConfig.promoBadge}
-                      onChange={(e) =>
-                        setDraftData((prev) => ({
-                          ...prev,
-                          discountConfig: { ...prev.discountConfig, promoBadge: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    />
-                  </div>
-                </div>
+                  {/* Pratinjau Langsung Kartu Promo */}
+                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <span className="block font-bold text-xs text-slate-800 dark:text-slate-200 mb-2">
+                      👁️ Pratinjau Tampilan Kartu Promo di Beranda:
+                    </span>
+                    <div className="p-4 sm:p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/90 via-white to-blue-50/80 dark:from-slate-850 dark:to-slate-900 shadow-md">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60">
+                          <Award className="w-3 h-3 text-amber-500" />
+                          {draftData.discountConfig.promoBadge || 'Spesial Bonus Saldo'}
+                        </span>
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                          <Clock className="w-3 h-3 text-emerald-500" />
+                          <span>48:29:19</span>
+                        </div>
+                      </div>
 
-                <div className="text-xs">
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Deskripsi Detail Promo:
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={draftData.discountConfig.promoDescription}
-                    onChange={(e) =>
-                      setDraftData((prev) => ({
-                        ...prev,
-                        discountConfig: { ...prev.discountConfig, promoDescription: e.target.value },
-                      }))
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                  ></textarea>
+                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white leading-tight">
+                        {draftData.discountConfig.promoTitle || 'Promo Bonus Saldo Isi Ulang'}
+                      </h4>
+
+                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                        {draftData.discountConfig.promoDescription || 'Dapatkan bonus saldo monetary langsung setiap top-up saldo My Ads.'}
+                      </p>
+
+                      <div className="mt-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Bonus Isi Ulang Saldo
+                          </span>
+                          <div className="flex items-baseline gap-1 mt-0.5">
+                            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                              {draftData.discountConfig.reloadDiscountPercent}%
+                            </span>
+                            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                              BONUS Setiap Top Up
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
+                          <Percent className="w-4 h-4" />
+                        </div>
+                      </div>
+
+                      {draftData.discountConfig.monetaryTiers && draftData.discountConfig.monetaryTiers.length > 0 && (
+                        <div className="mt-2.5 grid grid-cols-3 gap-1 text-center">
+                          {draftData.discountConfig.monetaryTiers.map((t) => (
+                            <div key={t.id} className="p-1 rounded bg-white/80 dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900 text-[10px]">
+                              <span className="text-slate-500 block truncate">{t.label}</span>
+                              <strong className="text-emerald-600 dark:text-emerald-400">+{t.bonusPercent}%</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1040,9 +1336,29 @@ export const AdminApp: React.FC = () => {
           {/* TAB 4: WHATSAPP & CONTACT */}
           {activeTab === 'CONTACT' && (
             <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm">
-                <Phone className="w-5 h-5" />
-                <span>Pengaturan Nomor WhatsApp & Informasi Brand</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                    <Phone className="w-5 h-5" />
+                    <span>Pengaturan Nomor WhatsApp & Informasi Brand</span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Tersinkronisasi 2-arah dengan Sheet <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">PENGATURAN_UMUM</span> di Google Spreadsheet.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (typeof refreshData === 'function') {
+                      await refreshData(false);
+                      showToast('Data WhatsApp & Brand telah ditarik dari Google Spreadsheet', 'SUCCESS');
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/50 dark:hover:bg-emerald-800/60 dark:text-emerald-300 transition-colors shrink-0"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Sinkronisasi GSheet</span>
+                </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -1197,220 +1513,385 @@ export const AdminApp: React.FC = () => {
                 <div>
                   <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <span>Kelola Lokasi Kantor Pusat & Kantor Cabang ({(draftData.offices || []).length})</span>
+                    <span>Lokasi Kantor Pusat & Cabang ({(draftData.offices || []).length})</span>
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Atur nama kantor, alamat lengkap, jam operasional, serta koordinat Latitude & Longitude Google Maps.
+                    Kelola daftar kantor cabang. Tersinkronisasi 2-arah dengan Sheet <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">LOKASI_CABANG</span> di Google Spreadsheet.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleAddNewOffice}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Kantor / Cabang</span>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (typeof refreshData === 'function') {
+                        await refreshData(false);
+                        if (typeof showToast === 'function') showToast('Data lokasi terbaru telah ditarik dari Google Sheet', 'SUCCESS');
+                      }
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/50 dark:hover:bg-emerald-800/60 dark:text-emerald-300 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Sinkronisasi GSheet</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleAddNewOffice}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all hover:shadow-md"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Lokasi Baru</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Office Cards */}
-              <div className="space-y-4">
-                {(draftData.offices || []).map((office, idx) => (
-                  <div
-                    key={office.id}
-                    className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold">
-                          {idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={office.name}
-                          onChange={(e) => handleOfficeChange(office.id, 'name', e.target.value)}
-                          placeholder="Nama Kantor (e.g. Kantor Cabang Surabaya)"
-                          className="font-bold text-sm sm:text-base text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 focus:ring-2 focus:ring-blue-500 min-w-[220px]"
-                        />
-                      </div>
-
+              {/* Form Tambah / Edit Kantor (Tampil jika ada kantor yang sedang diedit) */}
+              {editingOfficeId && (() => {
+                const currentEditing = (draftData.offices || []).find((o) => o.id === editingOfficeId);
+                if (!currentEditing) return null;
+                return (
+                  <div className="p-5 rounded-2xl border-2 border-blue-500/50 dark:border-blue-500/40 bg-blue-50/20 dark:bg-blue-950/20 shadow-sm space-y-4 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between pb-3 border-b border-blue-200/50 dark:border-blue-900/50">
                       <div className="flex items-center gap-2">
-                        <select
-                          value={office.type}
-                          onChange={(e) =>
-                            handleOfficeChange(office.id, 'type', e.target.value as 'PUSAT' | 'CABANG')
-                          }
-                          className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                        >
-                          <option value="PUSAT">Kantor Pusat</option>
-                          <option value="CABANG">Kantor Cabang</option>
-                        </select>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteOffice(office.id)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                          title="Hapus Kantor"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <Edit3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                          Form Edit Lokasi: {currentEditing.name || 'Kantor Baru'}
+                        </span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingOfficeId(null)}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 transition-colors"
+                      >
+                        Tutup Form
+                      </button>
                     </div>
 
-                    {/* Quick City Presets */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] font-semibold text-slate-400">Preset Cepat:</span>
-                      {CITY_PRESETS.map((preset) => (
-                        <button
-                          key={preset.city}
-                          type="button"
-                          onClick={() => {
-                            handleOfficeChange(office.id, 'cityName', preset.city);
-                            handleOfficeChange(office.id, 'latitude', preset.lat);
-                            handleOfficeChange(office.id, 'longitude', preset.lng);
-                            showToast(`Koordinat diisi untuk ${preset.city.split(',')[0]}`, 'INFO');
-                          }}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/40 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-blue-400 transition-colors"
-                        >
-                          {preset.city.split(',')[0]}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Inputs */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                       <div>
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          Kota / Wilayah:
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Nama Kantor / Outlet *
                         </label>
                         <input
                           type="text"
-                          value={office.cityName}
-                          onChange={(e) => handleOfficeChange(office.id, 'cityName', e.target.value)}
-                          placeholder="Gresik, Jawa Timur"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                          value={currentEditing.name}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'name', e.target.value)}
+                          placeholder="e.g. TDC Gresik"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         />
                       </div>
 
                       <div>
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          Latitude (Garis Lintang):
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Tipe Kantor
                         </label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={office.latitude}
-                          onChange={(e) =>
-                            handleOfficeChange(office.id, 'latitude', parseFloat(e.target.value) || 0)
-                          }
-                          placeholder="-7.161240"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                        />
+                        <select
+                          value={currentEditing.type}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'type', e.target.value as any)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        >
+                          <option value="CABANG">KANTOR CABANG</option>
+                          <option value="PUSAT">KANTOR PUSAT</option>
+                          <option value="SERVICE_POINT">SERVICE POINT</option>
+                        </select>
                       </div>
 
                       <div>
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          Longitude (Garis Bujur):
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Kota / Wilayah *
                         </label>
                         <input
-                          type="number"
-                          step="any"
-                          value={office.longitude}
-                          onChange={(e) =>
-                            handleOfficeChange(office.id, 'longitude', parseFloat(e.target.value) || 0)
-                          }
-                          placeholder="112.651890"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
+                          type="text"
+                          value={currentEditing.cityName}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'cityName', e.target.value)}
+                          placeholder="e.g. Gresik, Jawa Timur"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         />
                       </div>
 
                       <div className="sm:col-span-2 lg:col-span-3">
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          Alamat Lengkap Kantor:
+                        <span className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Pilih Cepat Kota Preset (Otomatis Atur Koordinat):
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {CITY_PRESETS.map((preset) => (
+                            <button
+                              key={preset.city}
+                              type="button"
+                              onClick={() => {
+                                handleOfficeChange(currentEditing.id, 'cityName', preset.city);
+                                handleOfficeChange(currentEditing.id, 'latitude', preset.lat);
+                                handleOfficeChange(currentEditing.id, 'longitude', preset.lng);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-400 text-slate-700 dark:text-slate-300 transition-colors"
+                            >
+                              📍 {preset.city}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Alamat Lengkap Kantor
                         </label>
                         <textarea
                           rows={2}
-                          value={office.address}
-                          onChange={(e) => handleOfficeChange(office.id, 'address', e.target.value)}
-                          placeholder="Jl. RA Kartini No. 88, Kebomas, Gresik, Jawa Timur 61121"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                          value={currentEditing.address}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'address', e.target.value)}
+                          placeholder="Alamat jalan, gedung, nomor, RT/RW..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
                         />
                       </div>
 
                       <div>
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          No. WhatsApp Cabang:
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Latitude (Garis Lintang)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={currentEditing.latitude}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'latitude', parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Longitude (Garis Bujur)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={currentEditing.longitude}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'longitude', parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Jam Operasional
                         </label>
                         <input
                           type="text"
-                          value={office.whatsapp || ''}
-                          onChange={(e) => handleOfficeChange(office.id, 'whatsapp', e.target.value)}
+                          value={currentEditing.operatingHours || ''}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'operatingHours', e.target.value)}
+                          placeholder="Senin - Sabtu (08.00 - 16.00)"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Nomor Telepon Kantor
+                        </label>
+                        <input
+                          type="text"
+                          value={currentEditing.phone || ''}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'phone', e.target.value)}
+                          placeholder="+62 812-3456-7890"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Nomor WhatsApp Cabang
+                        </label>
+                        <input
+                          type="text"
+                          value={currentEditing.whatsapp || ''}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'whatsapp', e.target.value)}
                           placeholder="6281234567890"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         />
                       </div>
 
                       <div>
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          Jam Layanan Operasional:
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Catatan / Info Fasilitas
                         </label>
                         <input
                           type="text"
-                          value={office.operatingHours || ''}
-                          onChange={(e) => handleOfficeChange(office.id, 'operatingHours', e.target.value)}
-                          placeholder="Senin - Sabtu ( 08.00 - 16.00 )"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          Catatan / Layanan:
-                        </label>
-                        <input
-                          type="text"
-                          value={office.notes || ''}
-                          onChange={(e) => handleOfficeChange(office.id, 'notes', e.target.value)}
-                          placeholder="Layanan konsultasi & aktivasi"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                          value={currentEditing.notes || ''}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'notes', e.target.value)}
+                          placeholder="Layanan konsultasi, aktivasi..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         />
                       </div>
                     </div>
 
-                    {/* Live Preview */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                          <Compass className="w-3.5 h-3.5 text-blue-500" />
-                          Titik Peta Google Maps
-                        </span>
-                        <a
-                          href={`https://www.google.com/maps?q=${office.latitude},${office.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>Buka Google Maps</span>
-                        </a>
-                      </div>
-                      <div className="w-full h-36 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900">
-                        <iframe
-                          title={`Preview ${office.name}`}
-                          src={`https://www.google.com/maps?q=${office.latitude},${office.longitude}&hl=id&z=15&output=embed`}
-                          className="w-full h-full border-0"
-                          loading="lazy"
+                    <div className="flex items-center justify-between pt-3 border-t border-blue-200/50 dark:border-blue-900/50">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(currentEditing.isPrimary)}
+                          onChange={(e) => handleOfficeChange(currentEditing.id, 'isPrimary', e.target.checked)}
+                          className="rounded text-blue-600 focus:ring-blue-500"
                         />
-                      </div>
+                        <span>Tandai sebagai Kantor Pusat Utama</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingOfficeId(null);
+                          showToast('Lokasi kantor diperbarui di formulir. Klik Simpan Pengaturan untuk sync ke Google Sheet.', 'SUCCESS');
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors"
+                      >
+                        Selesai Edit Lokasi
+                      </button>
                     </div>
                   </div>
-                ))}
+                );
+              })()}
+
+              {/* Office Cards List */}
+              <div className="space-y-4">
+                {(draftData.offices || []).length === 0 ? (
+                  <div className="p-10 text-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+                    <MapPin className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                      Belum ada data kantor / cabang.
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 mb-4">
+                      Tambahkan lokasi kantor baru atau tarik data dari Google Spreadsheet.
+                    </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddNewOffice}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Lokasi Pertama</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (typeof refreshData === 'function') {
+                            await refreshData(false);
+                            if (typeof showToast === 'function') showToast('Sinkronisasi data lokasi...', 'INFO');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition-colors"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Tarik dari Google Sheet</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  (draftData.offices || []).map((office, idx) => (
+                    <div
+                      key={office.id || idx}
+                      className={`p-5 rounded-2xl bg-white dark:bg-slate-900 border ${
+                        editingOfficeId === office.id
+                          ? 'border-blue-500 shadow-md ring-1 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 shadow-xs'
+                      } space-y-4`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold">
+                            {idx + 1}
+                          </span>
+                          <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                            {office.name || 'Kantor Cabang'}
+                          </span>
+                          {office.isPrimary && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                              ★ Utama
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase">
+                            {office.type === 'PUSAT' ? 'KANTOR PUSAT' : office.type === 'SERVICE_POINT' ? 'SERVICE POINT' : 'KANTOR CABANG'}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingOfficeId(office.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOffice(office.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus</span>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <p className="font-semibold text-slate-500 dark:text-slate-400 mb-1">Kota / Wilayah:</p>
+                          <p className="font-bold text-slate-900 dark:text-white">{office.cityName || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-500 dark:text-slate-400 mb-1">Koordinat (Lat, Lng):</p>
+                          <p className="font-mono text-slate-900 dark:text-white">{office.latitude}, {office.longitude}</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <p className="font-semibold text-slate-500 dark:text-slate-400 mb-1">Alamat Lengkap:</p>
+                          <p className="text-slate-900 dark:text-white">{office.address || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-500 dark:text-slate-400 mb-1">Telepon & WhatsApp:</p>
+                          <p className="text-slate-900 dark:text-white">{office.phone || '-'} / {office.whatsapp || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-500 dark:text-slate-400 mb-1">Jam Operasional:</p>
+                          <p className="text-slate-900 dark:text-white">{office.operatingHours || '-'}</p>
+                        </div>
+                      </div>
+
+                      {/* Live Preview */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <Compass className="w-3.5 h-3.5 text-blue-500" />
+                            Titik Peta Google Maps
+                          </span>
+                          <a
+                            href={`https://www.google.com/maps?q=${office.latitude},${office.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Buka Google Maps</span>
+                          </a>
+                        </div>
+                        <div className="w-full h-36 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900">
+                          <iframe
+                            title={`Preview ${office.name}`}
+                            src={`https://www.google.com/maps?q=${office.latitude},${office.longitude}&hl=id&z=15&output=embed`}
+                            className="w-full h-full border-0"
+                            loading="lazy"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
-          {/* TAB 5: TESTIMONIALS */}
+{/* TAB 5: TESTIMONIALS */}
           {activeTab === 'TESTIMONIALS' && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">

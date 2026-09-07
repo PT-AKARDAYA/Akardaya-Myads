@@ -41,6 +41,7 @@ export const ProductInventoryShowcase: React.FC = () => {
   const { data } = useApp();
   const [activeInventoryTab, setActiveInventoryTab] = useState<'all' | 'LBA' | 'Targeted' | 'Broadcast'>('all');
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [mobilePillarTab, setMobilePillarTab] = useState<'lba' | 'targeted' | 'broadcast' | 'all'>('lba');
 
   const handleTabChange = (tab: 'all' | 'LBA' | 'Targeted' | 'Broadcast') => {
     setActiveInventoryTab(tab);
@@ -443,11 +444,66 @@ export const ProductInventoryShowcase: React.FC = () => {
             </p>
           </div>
 
+          {/* Mobile Segmented Pillar Tabs (Visible on mobile screens) */}
+          <div className="lg:hidden">
+            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+              <Sliders className="w-3 h-3 text-red-500" />
+              Pilih Pilar Penargetan:
+            </div>
+            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
+              <button
+                onClick={() => setMobilePillarTab('lba')}
+                className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 whitespace-nowrap ${
+                  mobilePillarTab === 'lba'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>1. LBA Lokasi</span>
+              </button>
+              <button
+                onClick={() => setMobilePillarTab('targeted')}
+                className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 whitespace-nowrap ${
+                  mobilePillarTab === 'targeted'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>2. Targeted</span>
+              </button>
+              <button
+                onClick={() => setMobilePillarTab('broadcast')}
+                className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 whitespace-nowrap ${
+                  mobilePillarTab === 'broadcast'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>3. Broadcast</span>
+              </button>
+              <button
+                onClick={() => setMobilePillarTab('all')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  mobilePillarTab === 'all'
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Semua (3)
+              </button>
+            </div>
+          </div>
+
           {/* 3 Pillars Cards Grid (Matching Lampiran 1) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-stretch pt-2">
             
             {/* 1. LBA Card */}
-            <div className="bg-white dark:bg-slate-850 rounded-3xl border-2 border-red-500/80 shadow-md shadow-red-500/5 hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden">
+            <div className={`bg-white dark:bg-slate-850 rounded-3xl border-2 border-red-500/80 shadow-md shadow-red-500/5 hover:shadow-xl transition-all duration-300 flex-col overflow-hidden ${
+              (mobilePillarTab === 'lba' || mobilePillarTab === 'all') ? 'flex' : 'hidden lg:flex'
+            }`}>
               {/* Header Badge */}
               <div className="bg-gradient-to-r from-red-600 to-rose-600 p-5 text-white flex items-center justify-between">
                 <div>
@@ -527,7 +583,9 @@ export const ProductInventoryShowcase: React.FC = () => {
             </div>
 
             {/* 2. TARGETED Card */}
-            <div className="bg-white dark:bg-slate-850 rounded-3xl border-2 border-red-500/80 shadow-md shadow-red-500/5 hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden">
+            <div className={`bg-white dark:bg-slate-850 rounded-3xl border-2 border-red-500/80 shadow-md shadow-red-500/5 hover:shadow-xl transition-all duration-300 flex-col overflow-hidden ${
+              (mobilePillarTab === 'targeted' || mobilePillarTab === 'all') ? 'flex' : 'hidden lg:flex'
+            }`}>
               {/* Header Badge */}
               <div className="bg-gradient-to-r from-red-600 to-rose-600 p-5 text-white flex items-center justify-between">
                 <div>
@@ -635,7 +693,9 @@ export const ProductInventoryShowcase: React.FC = () => {
             </div>
 
             {/* 3. BROADCAST Card */}
-            <div className="bg-white dark:bg-slate-850 rounded-3xl border-2 border-red-500/80 shadow-md shadow-red-500/5 hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden">
+            <div className={`bg-white dark:bg-slate-850 rounded-3xl border-2 border-red-500/80 shadow-md shadow-red-500/5 hover:shadow-xl transition-all duration-300 flex-col overflow-hidden ${
+              (mobilePillarTab === 'broadcast' || mobilePillarTab === 'all') ? 'flex' : 'hidden lg:flex'
+            }`}>
               {/* Header Badge */}
               <div className="bg-gradient-to-r from-red-600 to-rose-600 p-5 text-white flex items-center justify-between">
                 <div>
