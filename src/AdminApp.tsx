@@ -76,12 +76,52 @@ export const AdminApp: React.FC = () => {
     return JSON.stringify(draftData) !== JSON.stringify(data);
   }, [draftData, data]);
 
-  // Automatically pause background sync whenever admin is actively editing or adding data
+  // Focus tracking: Pause G-Sheets sync strictly when cursor is inside an input field,
+  // and resume sync immediately when cursor leaves or user clicks outside/switches menu
   useEffect(() => {
-    if (isDirty && !isSyncPaused) {
-      setIsSyncPaused(true);
+    const isInputField = (el: Element | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName?.toLowerCase();
+      return (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        (el as HTMLElement).isContentEditable === true
+      );
+    };
+
+    const handleFocusIn = (e: FocusEvent) => {
+      if (isInputField(e.target as Element)) {
+        setIsSyncPaused(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      // Allow slight delay to check if another input field was immediately focused
+      setTimeout(() => {
+        if (!isInputField(document.activeElement)) {
+          setIsSyncPaused(false);
+        }
+      }, 100);
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, [setIsSyncPaused]);
+
+  // Helper when clicking another menu/tab: blur inputs and restore active sync
+  const handleSelectTab = (tab: typeof activeTab) => {
+    if (typeof document !== 'undefined' && document.activeElement) {
+      (document.activeElement as HTMLElement).blur?.();
     }
-  }, [isDirty, isSyncPaused, setIsSyncPaused]);
+    setIsSyncPaused(false);
+    setActiveTab(tab);
+  };
 
   // Read orders tracking for badge count
   const [readOrderIds, setReadOrderIds] = useState<string[]>(() => {
@@ -523,15 +563,51 @@ export const AdminApp: React.FC = () => {
 
           {/* Desktop Actions Bar */}
           <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
-            {/* View public website */}
-            <a
-              href="/"
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5"
+            {/* Google Sheets Sync Status Indicator & Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextPaused = !isSyncPaused;
+                setIsSyncPaused(nextPaused);
+                if (nextPaused) {
+                  showToast('⏸️ Sinkronisasi G-Sheets dijeda manual (aman untuk edit/tambah menu)', 'INFO');
+                } else {
+                  showToast('🟢 Sinkronisasi G-Sheets aktif kembali', 'SUCCESS');
+                }
+              }}
+              title={
+                isSyncPaused || isDirty
+                  ? 'Sinkronisasi G-Sheets sedang DIJEDA (Aman untuk edit/tambah menu). Klik untuk aktifkan kembali.'
+                  : 'Sinkronisasi G-Sheets AKTIF (Otomatis memperbarui data). Klik untuk menjeda saat edit.'
+              }
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-xs ${
+                isSyncPaused || isDirty
+                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+              }`}
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Buka Website Publik</span>
-              <span className="sm:hidden">Web</span>
-            </a>
+              <span className="relative flex h-2 w-2">
+                {!isSyncPaused && !isDirty && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    isSyncPaused || isDirty ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                ></span>
+              </span>
+              {isSyncPaused || isDirty ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>G-Sheets: Dijeda</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>G-Sheets: ON</span>
+                </>
+              )}
+            </button>
 
             {/* Backup Export */}
             <button
@@ -540,38 +616,6 @@ export const AdminApp: React.FC = () => {
               className="p-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               <Download className="w-4 h-4" />
-            </button>
-
-            {/* Sync Pause Toggle Button */}
-            <button
-              type="button"
-              onClick={() => {
-                const nextPaused = !isSyncPaused;
-                setIsSyncPaused(nextPaused);
-                if (nextPaused) {
-                  showToast('⏸️ Sinkronisasi otomatis dijeda (aman untuk edit/tambah menu)', 'INFO');
-                } else {
-                  showToast('🟢 Sinkronisasi otomatis aktif kembali', 'SUCCESS');
-                }
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
-                isSyncPaused || isDirty
-                  ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-xs'
-                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
-              }`}
-              title="Klik untuk menjeda/melanjutkan sinkronisasi otomatis"
-            >
-              {isSyncPaused || isDirty ? (
-                <>
-                  <Pause className="w-3.5 h-3.5" />
-                  <span>Sinkron Dijeda (Aman Edit)</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5" />
-                  <span>Sinkron Otomatis Aktif</span>
-                </>
-              )}
             </button>
 
             {/* Dark Mode Toggle */}
@@ -605,40 +649,13 @@ export const AdminApp: React.FC = () => {
         </div>
       </header>
 
-      {/* Sync Status / Edit Protection Notice Banner */}
-      {(isDirty || isSyncPaused) && (
-        <div className="bg-amber-500/10 dark:bg-amber-950/50 border-b border-amber-500/20 px-4 sm:px-6 py-2.5 animate-in fade-in">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="p-1 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold shrink-0">
-                <Pause className="w-4 h-4" />
-              </span>
-              <span>
-                <strong>{isDirty ? 'Mode Edit / Tambah Aktif' : 'Sinkronisasi Otomatis Dijeda'}:</strong> Sinkronisasi background dijeda agar data yang sedang Anda edit/tambah tidak tertimpa atau berubah-ubah secara otomatis.
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleSaveAll}
-                disabled={isSaving}
-                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Admin Content Container */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col md:flex-row gap-6">
         {/* Left Navigation Menu (Desktop Sidebar / Mobile Tabs) */}
         <aside className="w-full md:w-64 shrink-0 space-y-4">
           <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex md:flex-col gap-1.5 overflow-x-auto no-scrollbar">
             <button
-              onClick={() => setActiveTab('ANALYTICS')}
+              onClick={() => handleSelectTab('ANALYTICS')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'ANALYTICS'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -655,7 +672,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('PACKAGES')}
+              onClick={() => handleSelectTab('PACKAGES')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'PACKAGES'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -672,7 +689,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('DISCOUNT')}
+              onClick={() => handleSelectTab('DISCOUNT')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'DISCOUNT'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -689,7 +706,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('RATES')}
+              onClick={() => handleSelectTab('RATES')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'RATES'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -706,7 +723,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('CONTACT')}
+              onClick={() => handleSelectTab('CONTACT')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'CONTACT'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -720,7 +737,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('OFFICES')}
+              onClick={() => handleSelectTab('OFFICES')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'OFFICES'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -737,7 +754,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('TESTIMONIALS')}
+              onClick={() => handleSelectTab('TESTIMONIALS')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'TESTIMONIALS'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -754,7 +771,7 @@ export const AdminApp: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('LEADS')}
+              onClick={() => handleSelectTab('LEADS')}
               className={`flex-1 md:w-full px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2.5 transition-all text-left ${
                 activeTab === 'LEADS'
                   ? 'bg-blue-600 text-white shadow-sm'
