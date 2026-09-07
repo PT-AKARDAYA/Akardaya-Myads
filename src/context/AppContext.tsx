@@ -365,15 +365,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    // Track visitors locally on static hosting
+    // Initialize default active users count
     try {
-      const storedVisits = parseInt(localStorage.getItem('akardaya_total_visits') || '12', 10);
-      const newVisits = storedVisits + 1;
-      localStorage.setItem('akardaya_total_visits', newVisits.toString());
-      const baseActive = Math.floor(Math.random() * 4) + 3;
-      setActiveUsers(baseActive);
+      setActiveUsers(1);
     } catch (e) {
-      setActiveUsers(3);
+      setActiveUsers(1);
     }
 
     const isStaticHost = window.location.hostname.includes('github.io');

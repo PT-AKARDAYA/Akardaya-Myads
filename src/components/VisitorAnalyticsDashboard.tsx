@@ -271,31 +271,33 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
     try {
       const spreadsheetUrl = data?.companyConfig?.spreadsheetUrl;
       let logsToUse: VisitorRecord[] | null = null;
+      let sourceFound: 'spreadsheet' | 'server' | 'local' = 'local';
 
       // 1. Try to fetch directly from Google Spreadsheet Analytics_Logs
       if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
         const sheetLogs = await fetchRemoteAnalyticsFromSpreadsheet(spreadsheetUrl);
-        if (sheetLogs && sheetLogs.length > 0) {
+        if (sheetLogs !== null) {
+          // Spreadsheet is connected and responded (even if empty [] with 0 logs)
           logsToUse = sheetLogs;
-          setDataSource('spreadsheet');
+          sourceFound = 'spreadsheet';
         }
       }
 
       // 2. Check if AppData already contains analyticsLogs from regular GET_DATA sync
-      if (!logsToUse && data?.analyticsLogs && data.analyticsLogs.length > 0) {
+      if (logsToUse === null && data?.analyticsLogs !== undefined && Array.isArray(data.analyticsLogs)) {
         logsToUse = data.analyticsLogs as VisitorRecord[];
-        setDataSource('spreadsheet');
+        sourceFound = 'spreadsheet';
       }
 
-      // 3. Fallback to server endpoint
-      if (!logsToUse || logsToUse.length === 0) {
+      // 3. Fallback to server endpoint if spreadsheet is not reachable
+      if (logsToUse === null) {
         try {
           const res = await fetch('/api/analytics/stats');
           if (res.ok) {
             const json = await res.json();
-            if (json.status === 'success' && json.data && json.data.logs && json.data.logs.length > 0) {
+            if (json.status === 'success' && json.data && Array.isArray(json.data.logs)) {
               logsToUse = json.data.logs as VisitorRecord[];
-              setDataSource('server');
+              sourceFound = 'server';
             }
           }
         } catch {
@@ -303,30 +305,24 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         }
       }
 
-      // 4. If remote logs found, calculate summary from them
-      if (logsToUse && logsToUse.length > 0) {
-        const summary = calculateAnalyticsSummaryFromLogs(logsToUse);
-        setTotalPageViews(summary.totalViews);
-        setUniqueVisitors(summary.uniqueVisitors);
-        setDeviceBreakdown(summary.devicePercentages);
-        setTopPages(summary.topPages);
-        setTopBrowsers(summary.topBrowsers);
-        setDailyCounts(summary.dailyCounts);
-        setRecentLogs(summary.logs);
-        setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
-        return;
+      // 4. Ultimate Fallback: get real data stored in browser localStorage
+      if (logsToUse === null) {
+        const local = getLocalAnalyticsSummary();
+        logsToUse = local.logs || [];
+        sourceFound = 'local';
       }
 
-      // 5. Ultimate Fallback: get real data stored in browser localStorage
-      const local = getLocalAnalyticsSummary();
-      setTotalPageViews(local.totalViews);
-      setUniqueVisitors(local.uniqueVisitors);
-      setDeviceBreakdown(local.devicePercentages);
-      setTopPages(local.topPages);
-      setTopBrowsers(local.topBrowsers);
-      setDailyCounts(local.dailyCounts || []);
-      setRecentLogs(local.logs || []);
-      setDataSource('local');
+      setDataSource(sourceFound);
+
+      // Calculate statistics purely from the selected logs
+      const summary = calculateAnalyticsSummaryFromLogs(logsToUse || []);
+      setTotalPageViews(summary.totalViews);
+      setUniqueVisitors(summary.uniqueVisitors);
+      setDeviceBreakdown(summary.devicePercentages);
+      setTopPages(summary.topPages);
+      setTopBrowsers(summary.topBrowsers);
+      setDailyCounts(summary.dailyCounts);
+      setRecentLogs(summary.logs);
       setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
     } catch (err) {
       console.warn('Error loading real analytics stats:', err);
@@ -344,7 +340,7 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const maxChartCount = Math.max(...dailyCounts.map((d) => d.count), 5);
 
   const handleClearLogs = () => {
-    if (window.confirm('Hapus seluruh riwayat log kunjungan lokal di browser ini? (Data di Google Spreadsheet tetap tersimpan)')) {
+    if (window.confirm('Hapus seluruh riwayat log kunjungan lokal di browser ini? (Data di Google Spreadsheet tetap aman)')) {
       clearLocalAnalytics();
       refreshAnalyticsData();
     }
@@ -444,7 +440,11 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Total Kunjungan (Spreadsheet)
+              {dataSource === 'spreadsheet'
+                ? 'Total Kunjungan (Spreadsheet)'
+                : dataSource === 'server'
+                ? 'Total Kunjungan (Server)'
+                : 'Total Kunjungan (Cache Browser)'}
             </span>
             <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Eye className="w-4 h-4" />
@@ -456,7 +456,11 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
               <TrendingUp className="w-3 h-3" />
-              <span>Total Baris Log Terakumulasi</span>
+              <span>
+                {dataSource === 'spreadsheet'
+                  ? `${recentLogs.length} Baris Log di Spreadsheet`
+                  : 'Hits Tayangan dari Cache Browser'}
+              </span>
             </div>
           </div>
         </div>
@@ -610,6 +614,35 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Source Notice Banner */}
+      {dataSource === 'local' && (
+        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-2">
+            <Database className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <span className="font-bold">Menampilkan Data Cache Lokal Browser:</span> Data ini tercatat dari sesi browser Anda saat membuka website. Jika Google Spreadsheet Anda kosong atau belum disinkronkan, data lokal ini yang ditampilkan.
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleClearLogs}
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 font-bold transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Bersihkan Cache Lokal</span>
+            </button>
+            <button
+              onClick={refreshAnalyticsData}
+              disabled={isLoading}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>Sinkronkan ke Spreadsheet</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 4. DAFTAR LOG KUNJUNGAN (FULL-WIDTH REDESIGNED TABLE) */}
       <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
         {/* Table Card Header */}
@@ -621,21 +654,25 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               Daftar Log Kunjungan ({recentLogs.length} Data)
             </h3>
+            {dataSource === 'spreadsheet' && (
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-bold">
+                Live Spreadsheet
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-400 dark:text-slate-500 font-medium hidden sm:inline">
               Diurutkan dari kunjungan terbaru
             </span>
-            {recentLogs.length > 0 && (
-              <button
-                onClick={handleClearLogs}
-                className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-red-600 transition-colors"
-                title="Bersihkan Log Lokal"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={handleClearLogs}
+              className="px-2.5 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-500 hover:text-red-600 transition-colors text-xs font-semibold flex items-center gap-1 border border-slate-200 dark:border-slate-700 cursor-pointer"
+              title="Bersihkan Log Lokal di Browser"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+              <span>Reset Log Lokal</span>
+            </button>
           </div>
         </div>
 
