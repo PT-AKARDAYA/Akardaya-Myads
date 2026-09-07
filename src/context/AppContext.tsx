@@ -18,15 +18,24 @@ export const safeNormalizeData = (incoming: any): AppData => {
     : DEFAULT_CHANNEL_RATES;
 
   const rawDiscountConfig = incoming.discountConfig && typeof incoming.discountConfig === 'object' ? incoming.discountConfig : {};
+  
+  let incomingTiers = rawDiscountConfig.monetaryTiers;
+  if (typeof incomingTiers === 'string') {
+    try {
+      const parsed = JSON.parse(incomingTiers);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        incomingTiers = parsed;
+      }
+    } catch {}
+  }
+
   const safeDiscountConfig: DiscountConfig = {
     ...INITIAL_APP_DATA.discountConfig,
     ...rawDiscountConfig,
+    monetaryTiers: Array.isArray(incomingTiers) && incomingTiers.length > 0
+      ? incomingTiers
+      : INITIAL_APP_DATA.discountConfig.monetaryTiers,
   };
-
-  // Ensure default monetaryTiers exist if not present in saved data
-  if (!safeDiscountConfig.monetaryTiers || !Array.isArray(safeDiscountConfig.monetaryTiers)) {
-    safeDiscountConfig.monetaryTiers = INITIAL_APP_DATA.discountConfig.monetaryTiers;
-  }
 
   // Ensure "Promo Diskon Saldo" is migrated to "Promo Bonus Saldo" seamlessly
   if (safeDiscountConfig.promoTitle) {

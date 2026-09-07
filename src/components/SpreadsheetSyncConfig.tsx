@@ -72,9 +72,17 @@ function setupSheets() {
     const s = ss.insertSheet(SHEET_DISCOUNT);
     s.appendRow([
       "PERSEN_DISKON", "STATUS_PROMO", "JUDUL_PROMO", "BADGE_PROMO",
-      "DESKRIPSI_PROMO", "TANGGAL_BERAKHIR", "TERAKHIR_UPDATE"
+      "DESKRIPSI_PROMO", "TANGGAL_BERAKHIR", "SKEMA_TIERS_JSON", "TERAKHIR_UPDATE"
     ]);
     s.setFrozenRows(1);
+    formatHeader(s, "#059669");
+  } else {
+    const s = ss.getSheetByName(SHEET_DISCOUNT);
+    const headers = [
+      "PERSEN_DISKON", "STATUS_PROMO", "JUDUL_PROMO", "BADGE_PROMO",
+      "DESKRIPSI_PROMO", "TANGGAL_BERAKHIR", "SKEMA_TIERS_JSON", "TERAKHIR_UPDATE"
+    ];
+    s.getRange(1, 1, 1, headers.length).setValues([headers]);
     formatHeader(s, "#059669");
   }
 
@@ -130,13 +138,23 @@ function setupSheets() {
   }
 
   // 8. Sheet ANALITIK_PENGUNJUNG (Analytics_Logs)
+  const ANALYTICS_HEADERS = [
+    "Tanggal (WIB)", "Visitor ID", "Total Hits", "Halaman Dikunjungi", "Perangkat", "Browser", "ISP Provider", "Kota / Lokasi", "Sumber / Referrer", "Waktu Pertama (WIB)", "Terakhir Aktif (WIB)"
+  ];
   if (!ss.getSheetByName("Analytics_Logs")) {
     const s = ss.insertSheet("Analytics_Logs");
-    s.appendRow([
-      "Tanggal (WIB)", "Visitor ID", "Total Hits", "Halaman Dikunjungi", "Perangkat", "Browser", "Sumber / Referrer", "Waktu Pertama (WIB)", "Terakhir Aktif (WIB)"
-    ]);
+    s.appendRow(ANALYTICS_HEADERS);
     s.setFrozenRows(1);
     formatHeader(s, "#0F766E"); // Teal header
+  } else {
+    const s = ss.getSheetByName("Analytics_Logs");
+    if (s.getLastRow() >= 1) {
+      const headerValues = s.getRange(1, 1, 1, Math.max(s.getLastColumn(), ANALYTICS_HEADERS.length)).getDisplayValues()[0];
+      if (!headerValues[6] || headerValues[6].toString().toLowerCase().indexOf("isp") === -1) {
+        s.getRange(1, 1, 1, ANALYTICS_HEADERS.length).setValues([ANALYTICS_HEADERS]);
+        formatHeader(s, "#0F766E");
+      }
+    }
   }
 }
 
@@ -318,14 +336,25 @@ function readAllSheets(ss) {
 
   const sDisc = ss.getSheetByName(SHEET_DISCOUNT);
   if (sDisc && sDisc.getLastRow() > 1) {
-    const r = sDisc.getRange(2, 1, 1, sDisc.getLastColumn()).getValues()[0];
+    const lastCol = Math.max(sDisc.getLastColumn(), 8);
+    const r = sDisc.getRange(2, 1, 1, lastCol).getValues()[0];
+    let monetaryTiers = [];
+    if (r[6]) {
+      try {
+        const parsed = JSON.parse(String(r[6]));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          monetaryTiers = parsed;
+        }
+      } catch (err) {}
+    }
     result.discountConfig = {
-      reloadDiscountPercent: Number(r[0]) || 2,
+      reloadDiscountPercent: Number(r[0]) || 50,
       isPromoActive: String(r[1]).toUpperCase() === "AKTIF" || r[1] === true,
       promoTitle: String(r[2] || ""),
       promoBadge: String(r[3] || ""),
       promoDescription: String(r[4] || ""),
-      promoCountdownEnd: r[5] ? String(r[5]) : undefined
+      promoCountdownEnd: r[5] ? String(r[5]) : undefined,
+      monetaryTiers: monetaryTiers.length > 0 ? monetaryTiers : undefined
     };
   }
 
@@ -407,8 +436,12 @@ function readAnalyticsSheet(ss) {
   const lastRow = sheet.getLastRow();
   const numRows = Math.min(lastRow - 1, 1000);
   const startRow = lastRow - numRows + 1;
-  const lastCol = Math.max(sheet.getLastColumn(), 9);
+  const lastCol = Math.max(sheet.getLastColumn(), 11);
   const rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+
+  // Check header to know if ISP Provider is in column 7 (index 6)
+  const headerValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+  const is11ColFormat = headerValues[6] && (headerValues[6].toString().toLowerCase().indexOf("isp") !== -1 || headerValues[6].toString().toLowerCase().indexOf("provider") !== -1);
 
   return rows.map(r => {
     const col0 = String(r[0] || "");
@@ -421,9 +454,35 @@ function readAnalyticsSheet(ss) {
       const pages = String(r[3] || "/");
       const device = String(r[4] || "Unknown");
       const browser = String(r[5] || "Unknown");
-      const referrer = String(r[6] || "Direct");
-      const firstTime = String(r[7] || "");
-      const lastTime = String(r[8] || "");
+      
+      let isp = "-";
+      let city = "Indonesia";
+      let region = "WIB";
+      let referrer = "Direct";
+      let firstTime = "";
+      let lastTime = "";
+
+      if (is11ColFormat || lastCol >= 11) {
+        isp = String(r[6] || "-").trim();
+        const locStr = String(r[7] || "Indonesia").trim();
+        if (locStr && locStr !== "-") {
+          if (locStr.includes(",")) {
+            const parts = locStr.split(",");
+            city = parts[0].trim();
+            region = parts.slice(1).join(",").trim();
+          } else {
+            city = locStr;
+          }
+        }
+        referrer = String(r[8] || "Direct");
+        firstTime = String(r[9] || "");
+        lastTime = String(r[10] || "");
+      } else {
+        referrer = String(r[6] || "Direct");
+        firstTime = String(r[7] || "");
+        lastTime = String(r[8] || "");
+      }
+
       const fullTimestamp = col0 + (lastTime ? " " + lastTime : "");
 
       return {
@@ -434,6 +493,9 @@ function readAnalyticsSheet(ss) {
         page: pages,
         device: device,
         browser: browser,
+        isp: isp,
+        city: city,
+        region: region,
         referrer: referrer,
         eventType: "pageview",
         firstTime: firstTime,
@@ -447,6 +509,9 @@ function readAnalyticsSheet(ss) {
         page: String(r[2] || "/"),
         device: String(r[3] || "Unknown"),
         browser: String(r[4] || "Unknown"),
+        isp: "-",
+        city: "Indonesia",
+        region: "WIB",
         referrer: String(r[5] || "Direct"),
         eventType: String(r[6] || "pageview"),
         screen: String(r[7] || "")
@@ -466,6 +531,8 @@ function recordVisitorLogConsolidated(ss, p) {
     "Halaman Dikunjungi",
     "Perangkat",
     "Browser",
+    "ISP Provider",
+    "Kota / Lokasi",
     "Sumber / Referrer",
     "Waktu Pertama (WIB)",
     "Terakhir Aktif (WIB)"
@@ -477,8 +544,8 @@ function recordVisitorLogConsolidated(ss, p) {
     sheet.setFrozenRows(1);
     formatHeader(sheet, "#0F766E");
   } else {
-    const firstRowValues = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 9)).getDisplayValues()[0];
-    if (!firstRowValues[2] || firstRowValues[2].toLowerCase().indexOf("hit") === -1) {
+    const firstRowValues = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), modernHeaders.length)).getDisplayValues()[0];
+    if (!firstRowValues[6] || firstRowValues[6].toLowerCase().indexOf("isp") === -1) {
       sheet.getRange(1, 1, 1, modernHeaders.length).setValues([modernHeaders]);
       formatHeader(sheet, "#0F766E");
     }
@@ -495,6 +562,8 @@ function recordVisitorLogConsolidated(ss, p) {
     const page = String(p.page || "/").trim();
     const device = String(p.device || "Unknown").trim();
     const browser = String(p.browser || "Unknown").trim();
+    const isp = String(p.isp || p.org || "-").trim();
+    const location = String(p.location || (p.city ? (p.city + (p.region ? ", " + p.region : "")) : "-")).trim();
     const referrer = String(p.referrer || "Direct").trim();
 
     const now = new Date();
@@ -505,11 +574,13 @@ function recordVisitorLogConsolidated(ss, p) {
     let foundRowIndex = -1;
     let existingHits = 1;
     let existingPages = "";
+    let existingIsp = "";
+    let existingLoc = "";
 
     if (lastRow > 1) {
       const checkRows = Math.min(lastRow - 1, 500);
       const startRow = lastRow - checkRows + 1;
-      const maxCol = Math.max(sheet.getLastColumn(), 9);
+      const maxCol = Math.max(sheet.getLastColumn(), 11);
       const displayRange = sheet.getRange(startRow, 1, checkRows, maxCol).getDisplayValues();
       const rawRange = sheet.getRange(startRow, 1, checkRows, maxCol).getValues();
 
@@ -537,6 +608,8 @@ function recordVisitorLogConsolidated(ss, p) {
           const col2Val = rowRaw[2];
           existingHits = Number(col2Val) || Number(rowDisplay[2]) || 1;
           existingPages = String(rowDisplay[3] || rowRaw[3] || "");
+          existingIsp = String(rowDisplay[6] || rowRaw[6] || "");
+          existingLoc = String(rowDisplay[7] || rowRaw[7] || "");
           break;
         }
       }
@@ -554,7 +627,9 @@ function recordVisitorLogConsolidated(ss, p) {
       sheet.getRange(foundRowIndex, 4).setValue(updatedPages);
       if (device && device !== "Unknown") sheet.getRange(foundRowIndex, 5).setValue(device);
       if (browser && browser !== "Unknown") sheet.getRange(foundRowIndex, 6).setValue(browser);
-      sheet.getRange(foundRowIndex, 9).setValue(timeNowStr);
+      if (isp && isp !== "-" && (!existingIsp || existingIsp === "-")) sheet.getRange(foundRowIndex, 7).setValue(isp);
+      if (location && location !== "-" && (!existingLoc || existingLoc === "-")) sheet.getRange(foundRowIndex, 8).setValue(location);
+      sheet.getRange(foundRowIndex, 11).setValue(timeNowStr);
 
       return {
         status: "success",
@@ -571,6 +646,8 @@ function recordVisitorLogConsolidated(ss, p) {
         page,
         device,
         browser,
+        isp || "-",
+        location || "-",
         referrer,
         timeNowStr,
         timeNowStr
@@ -631,9 +708,16 @@ function saveAllSheets(ss, data) {
     const s = ss.getSheetByName(SHEET_DISCOUNT);
     if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
     const d = data.discountConfig;
-    s.getRange(2, 1, 1, 7).setValues([[
-      d.reloadDiscountPercent || 2, d.isPromoActive ? "AKTIF" : "NONAKTIF", d.promoTitle || "",
-      d.promoBadge || "", d.promoDescription || "", d.promoCountdownEnd || "", now
+    const tiersJson = JSON.stringify(d.monetaryTiers || []);
+    s.getRange(2, 1, 1, 8).setValues([[
+      d.reloadDiscountPercent !== undefined ? d.reloadDiscountPercent : 50,
+      d.isPromoActive ? "AKTIF" : "NONAKTIF",
+      d.promoTitle || "",
+      d.promoBadge || "",
+      d.promoDescription || "",
+      d.promoCountdownEnd || "",
+      tiersJson,
+      now
     ]]);
   }
 
@@ -787,10 +871,10 @@ function doOptions(e) {
     },
     {
       name: 'Analytics_Logs',
-      label: 'Log Pengunjung (Hemat Baris)',
+      label: 'Log Pengunjung & Lokasi',
       icon: Database,
       color: 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-800',
-      desc: 'Rekap analitik pengunjung riil. Kunjungan di hari yang sama digabung dalam 1 baris (hemat baris otomatis).',
+      desc: 'Rekap analitik pengunjung riil (ISP Provider, Kota/Lokasi, Perangkat, Hits, Halaman, Waktu WIB). Kunjungan hari yang sama digabung otomatis.',
     },
   ];
 

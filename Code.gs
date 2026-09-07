@@ -2,18 +2,19 @@
  * AKARDAYA MYADS - GOOGLE APPS SCRIPT DATABASE BACKEND (Code.gs)
  * Multi-Sheet Database Architecture (Satu Menu Satu Sheet Khusus)
  * 
- * Daftar 7 Sheet Database yang dibuat otomatis:
- * 1. PAKET_LANGGANAN     -> Data 8 Paket Langganan & Detail Fasilitas
- * 2. DISKON_ISI_ULANG    -> Setting Diskon Saldo, Timer Promo & Badge
- * 3. TARIF_SALURAN_IKLAN -> Katalog 20 Tarif SMS, LBA, MMS, RCS, WA WABA
+ * Daftar 8 Sheet Database yang dibuat & dikelola otomatis:
+ * 1. PAKET_LANGGANAN     -> Data Paket Langganan & Detail Fasilitas
+ * 2. DISKON_ISI_ULANG    -> Setting Promo & Bonus Saldo per Tier Nominal (SKEMA_TIERS_JSON)
+ * 3. TARIF_SALURAN_IKLAN -> Katalog Tarif Saluran Iklan (SMS, LBA, MMS, RCS, WA WABA)
  * 4. PENGATURAN_UMUM     -> Nomor WhatsApp, Brand, Email, Jam Operasional & Pengumuman
- * 5. LOKASI_CABANG       -> Daftar Kantor Cabang TDC Gresik, Surabaya, Jakarta, dll.
+ * 5. LOKASI_CABANG       -> Daftar Kantor Cabang & Koordinat Peta
  * 6. TESTIMONI           -> Ulasan & Review Kepuasan Pelanggan
  * 7. PESANAN_LEADS       -> Catatan Formulir Masuk Pemesanan Klien
+ * 8. Analytics_Logs      -> Log Pengunjung Riil + ISP Provider & Kota/Lokasi (Hemat Baris Harian)
  * 
  * -------------------------------------------------------------
  * PETUNJUK PENERAPAN (DEPLOY):
- * 1. Buat Google Spreadsheet baru di Google Drive Anda (Beri nama: "Database Akardaya MyAds")
+ * 1. Buka Google Spreadsheet Anda
  * 2. Di Spreadsheet, klik menu: "Ekstensi" (Extensions) -> "Apps Script"
  * 3. Hapus semua kode bawaan, lalu Salin & Tempel (Paste) seluruh isi file ini
  * 4. Klik ikon "Simpan" (Save) 💾
@@ -55,15 +56,23 @@ function setupSheets() {
     formatHeader(s, "#1E40AF"); // Blue header
   }
 
-  // 2. Sheet DISKON_ISI_ULANG
+  // 2. Sheet DISKON_ISI_ULANG (Mendukung SKEMA_TIERS_JSON)
   if (!ss.getSheetByName(SHEET_DISCOUNT)) {
     const s = ss.insertSheet(SHEET_DISCOUNT);
     s.appendRow([
       "PERSEN_DISKON", "STATUS_PROMO", "JUDUL_PROMO", "BADGE_PROMO",
-      "DESKRIPSI_PROMO", "TANGGAL_BERAKHIR", "TERAKHIR_UPDATE"
+      "DESKRIPSI_PROMO", "TANGGAL_BERAKHIR", "SKEMA_TIERS_JSON", "TERAKHIR_UPDATE"
     ]);
     s.setFrozenRows(1);
     formatHeader(s, "#059669"); // Emerald header
+  } else {
+    const s = ss.getSheetByName(SHEET_DISCOUNT);
+    const headers = [
+      "PERSEN_DISKON", "STATUS_PROMO", "JUDUL_PROMO", "BADGE_PROMO",
+      "DESKRIPSI_PROMO", "TANGGAL_BERAKHIR", "SKEMA_TIERS_JSON", "TERAKHIR_UPDATE"
+    ];
+    s.getRange(1, 1, 1, headers.length).setValues([headers]);
+    formatHeader(s, "#059669");
   }
 
   // 3. Sheet TARIF_SALURAN_IKLAN
@@ -122,14 +131,24 @@ function setupSheets() {
     formatHeader(s, "#DC2626"); // Red header
   }
 
-  // 8. Sheet ANALITIK_PENGUNJUNG (Analytics_Logs)
+  // 8. Sheet ANALITIK_PENGUNJUNG (Analytics_Logs dengan ISP & Lokasi)
+  const ANALYTICS_HEADERS = [
+    "Tanggal (WIB)", "Visitor ID", "Total Hits", "Halaman Dikunjungi", "Perangkat", "Browser", "ISP Provider", "Kota / Lokasi", "Sumber / Referrer", "Waktu Pertama (WIB)", "Terakhir Aktif (WIB)"
+  ];
   if (!ss.getSheetByName("Analytics_Logs")) {
     const s = ss.insertSheet("Analytics_Logs");
-    s.appendRow([
-      "Tanggal (WIB)", "Visitor ID", "Total Hits", "Halaman Dikunjungi", "Perangkat", "Browser", "Sumber / Referrer", "Waktu Pertama (WIB)", "Terakhir Aktif (WIB)"
-    ]);
+    s.appendRow(ANALYTICS_HEADERS);
     s.setFrozenRows(1);
     formatHeader(s, "#0F766E"); // Teal header
+  } else {
+    const s = ss.getSheetByName("Analytics_Logs");
+    if (s.getLastRow() >= 1) {
+      const headerValues = s.getRange(1, 1, 1, Math.max(s.getLastColumn(), ANALYTICS_HEADERS.length)).getDisplayValues()[0];
+      if (!headerValues[6] || headerValues[6].toString().toLowerCase().indexOf("isp") === -1) {
+        s.getRange(1, 1, 1, ANALYTICS_HEADERS.length).setValues([ANALYTICS_HEADERS]);
+        formatHeader(s, "#0F766E");
+      }
+    }
   }
 
   // Hapus Sheet1 default jika kosong
@@ -150,7 +169,7 @@ function formatHeader(sheet, bgColor) {
 }
 
 /**
- * Handle GET Request (Mengambil Data Lengkap dari 7 Sheet)
+ * Handle GET Request (Mengambil Data Lengkap dari Sheet)
  */
 function doGet(e) {
   setupSheets();
@@ -233,7 +252,7 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        message: "Semua pengaturan berhasil disimpan ke 7 sheet masing-masing di Google Spreadsheet",
+        message: "Semua pengaturan berhasil disimpan ke sheet masing-masing di Google Spreadsheet",
         updatedAt: new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })
       })).setMimeType(ContentService.MimeType.JSON);
     }
@@ -308,7 +327,7 @@ function doPost(e) {
 
 /**
  * =========================================================================
- * FUNGSI BACA (READ) DARI 7 SHEET
+ * FUNGSI BACA (READ) DARI SELURUH SHEET
  * =========================================================================
  */
 function readAllSheets(ss) {
@@ -320,6 +339,7 @@ function readAllSheets(ss) {
     offices: [],
     testimonials: [],
     orders: [],
+    analyticsLogs: [],
     lastUpdated: new Date().toISOString()
   };
 
@@ -349,17 +369,28 @@ function readAllSheets(ss) {
     }));
   }
 
-  // 2. Baca Sheet DISKON_ISI_ULANG
+  // 2. Baca Sheet DISKON_ISI_ULANG (Termasuk Skema Tiers)
   const sDisc = ss.getSheetByName(SHEET_DISCOUNT);
   if (sDisc && sDisc.getLastRow() > 1) {
-    const r = sDisc.getRange(2, 1, 1, sDisc.getLastColumn()).getValues()[0];
+    const lastCol = Math.max(sDisc.getLastColumn(), 8);
+    const r = sDisc.getRange(2, 1, 1, lastCol).getValues()[0];
+    let monetaryTiers = [];
+    if (r[6]) {
+      try {
+        const parsed = JSON.parse(String(r[6]));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          monetaryTiers = parsed;
+        }
+      } catch (err) {}
+    }
     result.discountConfig = {
-      reloadDiscountPercent: Number(r[0]) || 2,
+      reloadDiscountPercent: Number(r[0]) || 50,
       isPromoActive: String(r[1]).toUpperCase() === "AKTIF" || r[1] === true,
       promoTitle: String(r[2] || ""),
       promoBadge: String(r[3] || ""),
       promoDescription: String(r[4] || ""),
-      promoCountdownEnd: r[5] ? String(r[5]) : undefined
+      promoCountdownEnd: r[5] ? String(r[5]) : undefined,
+      monetaryTiers: monetaryTiers.length > 0 ? monetaryTiers : undefined
     };
   }
 
@@ -419,23 +450,23 @@ function readAllSheets(ss) {
   const sTest = ss.getSheetByName(SHEET_TESTIMONIALS);
   if (sTest && sTest.getLastRow() > 1) {
     const rows = sTest.getRange(2, 1, sTest.getLastRow() - 1, sTest.getLastColumn()).getValues();
-    result.testimonials = rows.map(r => ({
-      id: String(r[0]),
-      date: String(r[1]),
-      name: String(r[2]),
-      companyOrStore: String(r[3]),
-      role: String(r[4]),
-      rating: Number(r[5]) || 5,
-      comment: String(r[6]),
-      packageName: String(r[7]),
-      verified: String(r[8]).toUpperCase() === "YA" || r[8] === true
+    result.testimonials = rows.map(t => ({
+      id: String(t[0]),
+      date: String(t[1]),
+      name: String(t[2]),
+      companyOrStore: String(t[3]),
+      role: String(t[4]),
+      rating: Number(t[5]) || 5,
+      comment: String(t[6]),
+      packageName: String(t[7]),
+      verified: String(t[8]).toUpperCase() === "YA" || r[8] === true
     }));
   }
 
   // 7. Baca Sheet PESANAN_LEADS
   result.orders = readLeadsSheet(ss);
 
-  // 8. Baca Sheet Analytics_Logs (Log Pengunjung Riil)
+  // 8. Baca Sheet Analytics_Logs (Log Pengunjung Riil + ISP & Lokasi)
   result.analyticsLogs = readAnalyticsSheet(ss);
 
   return result;
@@ -448,14 +479,17 @@ function readAnalyticsSheet(ss) {
   const lastRow = sheet.getLastRow();
   const numRows = Math.min(lastRow - 1, 1000);
   const startRow = lastRow - numRows + 1;
-  const lastCol = Math.max(sheet.getLastColumn(), 9);
+  const lastCol = Math.max(sheet.getLastColumn(), 11);
   const rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+
+  // Deteksi kolom header apakah sudah versi 11 kolom (termasuk ISP & Lokasi)
+  const headerValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+  const is11ColFormat = headerValues[6] && (headerValues[6].toString().toLowerCase().indexOf("isp") !== -1 || headerValues[6].toString().toLowerCase().indexOf("provider") !== -1);
 
   return rows.map(r => {
     const col0 = String(r[0] || "");
     const col1 = String(r[1] || "");
     const col2 = r[2];
-    // Check if new consolidated format where col2 is numeric Hits
     const isNumericHits = typeof col2 === "number" || (!isNaN(Number(col2)) && String(col2).trim() !== "" && !String(col2).includes("/"));
     
     if (isNumericHits) {
@@ -463,9 +497,35 @@ function readAnalyticsSheet(ss) {
       const pages = String(r[3] || "/");
       const device = String(r[4] || "Unknown");
       const browser = String(r[5] || "Unknown");
-      const referrer = String(r[6] || "Direct");
-      const firstTime = String(r[7] || "");
-      const lastTime = String(r[8] || "");
+      
+      let isp = "-";
+      let city = "Indonesia";
+      let region = "WIB";
+      let referrer = "Direct";
+      let firstTime = "";
+      let lastTime = "";
+
+      if (is11ColFormat || lastCol >= 11) {
+        isp = String(r[6] || "-").trim();
+        const locStr = String(r[7] || "Indonesia").trim();
+        if (locStr && locStr !== "-") {
+          if (locStr.includes(",")) {
+            const parts = locStr.split(",");
+            city = parts[0].trim();
+            region = parts.slice(1).join(",").trim();
+          } else {
+            city = locStr;
+          }
+        }
+        referrer = String(r[8] || "Direct");
+        firstTime = String(r[9] || "");
+        lastTime = String(r[10] || "");
+      } else {
+        referrer = String(r[6] || "Direct");
+        firstTime = String(r[7] || "");
+        lastTime = String(r[8] || "");
+      }
+
       const fullTimestamp = col0 + (lastTime ? " " + lastTime : "");
 
       return {
@@ -476,13 +536,16 @@ function readAnalyticsSheet(ss) {
         page: pages,
         device: device,
         browser: browser,
+        isp: isp,
+        city: city,
+        region: region,
         referrer: referrer,
         eventType: "pageview",
         firstTime: firstTime,
         lastTime: lastTime
       };
     } else {
-      // Legacy format (8 columns without consolidation)
+      // Format legacy 8 kolom
       return {
         timestamp: col0,
         visitorId: col1,
@@ -490,6 +553,9 @@ function readAnalyticsSheet(ss) {
         page: String(r[2] || "/"),
         device: String(r[3] || "Unknown"),
         browser: String(r[4] || "Unknown"),
+        isp: "-",
+        city: "Indonesia",
+        region: "WIB",
         referrer: String(r[5] || "Direct"),
         eventType: String(r[6] || "pageview"),
         screen: String(r[7] || "")
@@ -500,6 +566,7 @@ function readAnalyticsSheet(ss) {
 
 /**
  * Fungsi Pintar: Menghemat Baris Spreadsheet dengan Menggabungkan Kunjungan Visitor ID di Hari yang Sama
+ * Termasuk pencatatan ISP Provider & Kota/Provinsi Lokasi
  */
 function recordVisitorLogConsolidated(ss, p) {
   const analyticsSheetName = "Analytics_Logs";
@@ -512,6 +579,8 @@ function recordVisitorLogConsolidated(ss, p) {
     "Halaman Dikunjungi",
     "Perangkat",
     "Browser",
+    "ISP Provider",
+    "Kota / Lokasi",
     "Sumber / Referrer",
     "Waktu Pertama (WIB)",
     "Terakhir Aktif (WIB)"
@@ -523,9 +592,9 @@ function recordVisitorLogConsolidated(ss, p) {
     sheet.setFrozenRows(1);
     formatHeader(sheet, "#0F766E"); // Teal header
   } else {
-    // Periksa apakah header masih versi lama (misal 8 kolom atau kolom 3 masih "Page")
-    const firstRowValues = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 9)).getDisplayValues()[0];
-    if (!firstRowValues[2] || firstRowValues[2].toLowerCase().indexOf("hit") === -1) {
+    // Periksa apakah header masih versi lama (misal 9 kolom lama)
+    const firstRowValues = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), modernHeaders.length)).getDisplayValues()[0];
+    if (!firstRowValues[6] || firstRowValues[6].toLowerCase().indexOf("isp") === -1) {
       sheet.getRange(1, 1, 1, modernHeaders.length).setValues([modernHeaders]);
       formatHeader(sheet, "#0F766E");
     }
@@ -545,6 +614,8 @@ function recordVisitorLogConsolidated(ss, p) {
     const page = String(p.page || "/").trim();
     const device = String(p.device || "Unknown").trim();
     const browser = String(p.browser || "Unknown").trim();
+    const isp = String(p.isp || p.org || "-").trim();
+    const location = String(p.location || (p.city ? (p.city + (p.region ? ", " + p.region : "")) : "-")).trim();
     const referrer = String(p.referrer || "Direct").trim();
 
     // Waktu saat ini di zona Asia/Jakarta (WIB)
@@ -556,12 +627,14 @@ function recordVisitorLogConsolidated(ss, p) {
     let foundRowIndex = -1;
     let existingHits = 1;
     let existingPages = "";
+    let existingIsp = "";
+    let existingLoc = "";
 
     if (lastRow > 1) {
-      // Ambil data display values (string apa adanya di layar) dan raw values
+      // Ambil data display values dan raw values
       const checkRows = Math.min(lastRow - 1, 500);
       const startRow = lastRow - checkRows + 1;
-      const maxCol = Math.max(sheet.getLastColumn(), 9);
+      const maxCol = Math.max(sheet.getLastColumn(), 11);
       const displayRange = sheet.getRange(startRow, 1, checkRows, maxCol).getDisplayValues();
       const rawRange = sheet.getRange(startRow, 1, checkRows, maxCol).getValues();
 
@@ -590,6 +663,8 @@ function recordVisitorLogConsolidated(ss, p) {
           const col2Val = rowRaw[2];
           existingHits = Number(col2Val) || Number(rowDisplay[2]) || 1;
           existingPages = String(rowDisplay[3] || rowRaw[3] || "");
+          existingIsp = String(rowDisplay[6] || rowRaw[6] || "");
+          existingLoc = String(rowDisplay[7] || rowRaw[7] || "");
           break;
         }
       }
@@ -606,12 +681,14 @@ function recordVisitorLogConsolidated(ss, p) {
       }
       const updatedPages = pageList.join(", ");
 
-      // Update kolom Total Hits (kolom 3), Halaman (kolom 4), Perangkat (kolom 5), Browser (kolom 6), Terakhir Aktif (kolom 9)
+      // Update kolom Total Hits (kolom 3), Halaman (kolom 4), Perangkat (kolom 5), Browser (kolom 6), ISP (kolom 7), Lokasi (kolom 8), Terakhir Aktif (kolom 11)
       sheet.getRange(foundRowIndex, 3).setValue(newHits);
       sheet.getRange(foundRowIndex, 4).setValue(updatedPages);
       if (device && device !== "Unknown") sheet.getRange(foundRowIndex, 5).setValue(device);
       if (browser && browser !== "Unknown") sheet.getRange(foundRowIndex, 6).setValue(browser);
-      sheet.getRange(foundRowIndex, 9).setValue(timeNowStr);
+      if (isp && isp !== "-" && (!existingIsp || existingIsp === "-")) sheet.getRange(foundRowIndex, 7).setValue(isp);
+      if (location && location !== "-" && (!existingLoc || existingLoc === "-")) sheet.getRange(foundRowIndex, 8).setValue(location);
+      sheet.getRange(foundRowIndex, 11).setValue(timeNowStr);
 
       return {
         status: "success",
@@ -621,7 +698,7 @@ function recordVisitorLogConsolidated(ss, p) {
         hits: newHits
       };
     } else {
-      // PENGUNJUNG ATAU HARI BARU -> BUAT 1 BARIS BARU
+      // PENGUNJUNG ATAU HARI BARU -> BUAT 1 BARIS BARU (11 Kolom Lengkap)
       sheet.appendRow([
         todayDateStr,
         visitorId,
@@ -629,6 +706,8 @@ function recordVisitorLogConsolidated(ss, p) {
         page,
         device,
         browser,
+        isp || "-",
+        location || "-",
         referrer,
         timeNowStr,
         timeNowStr
@@ -707,20 +786,22 @@ function saveAllSheets(ss, data) {
     s.getRange(2, 1, pkgRows.length, pkgRows[0].length).setValues(pkgRows);
   }
 
-  // 2. Tulis Sheet DISKON_ISI_ULANG
+  // 2. Tulis Sheet DISKON_ISI_ULANG (Termasuk Skema Tiers JSON)
   if (data.discountConfig) {
     const s = ss.getSheetByName(SHEET_DISCOUNT);
     if (s.getLastRow() > 1) {
       s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
     }
     const d = data.discountConfig;
-    s.getRange(2, 1, 1, 7).setValues([[
-      d.reloadDiscountPercent || 2,
+    const tiersJson = JSON.stringify(d.monetaryTiers || []);
+    s.getRange(2, 1, 1, 8).setValues([[
+      d.reloadDiscountPercent !== undefined ? d.reloadDiscountPercent : 50,
       d.isPromoActive ? "AKTIF" : "NONAKTIF",
       d.promoTitle || "",
       d.promoBadge || "",
       d.promoDescription || "",
       d.promoCountdownEnd || "",
+      tiersJson,
       now
     ]]);
   }
@@ -818,3 +899,4 @@ function doOptions(e) {
   return ContentService.createTextOutput("OK")
     .setMimeType(ContentService.MimeType.TEXT);
 }
+

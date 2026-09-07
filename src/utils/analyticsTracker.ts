@@ -15,6 +15,79 @@ export interface VisitorRecord {
   date?: string;
   firstTime?: string;
   lastTime?: string;
+  os?: string;
+  isp?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+}
+
+export interface GeoIspInfo {
+  isp: string;
+  city: string;
+  region: string;
+  country: string;
+}
+
+const GEO_CACHE_KEY = 'akardaya_geo_cache';
+
+export function getCachedGeoIsp(): GeoIspInfo | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(GEO_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.isp || parsed.city)) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+export async function fetchGeoIspAsync(): Promise<GeoIspInfo | null> {
+  if (typeof window === 'undefined') return null;
+  const cached = getCachedGeoIsp();
+  if (cached && cached.isp && cached.city) return cached;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch('https://ipwho.is/', { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success !== false) {
+        const info: GeoIspInfo = {
+          isp: data.connection?.isp || data.connection?.org || data.isp || 'Provider Internet',
+          city: data.city || 'Indonesia',
+          region: data.region || 'WIB',
+          country: data.country || 'Indonesia',
+        };
+        localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(info));
+        return info;
+      }
+    }
+  } catch {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        const info: GeoIspInfo = {
+          isp: data.org || data.asn || 'Provider Internet',
+          city: data.city || 'Indonesia',
+          region: data.region || 'WIB',
+          country: data.country_name || 'Indonesia',
+        };
+        localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(info));
+        return info;
+      }
+    } catch {}
+  }
+  return null;
 }
 
 export interface LocalAnalyticsSummary {
@@ -70,14 +143,59 @@ function getOrCreateVisitorId(): string {
   return vId;
 }
 
+export function getDetailedOS(ua: string): string {
+  if (/Windows NT 10\.0/i.test(ua)) return 'Windows 10/11';
+  if (/Windows NT 6\.3/i.test(ua)) return 'Windows 8.1';
+  if (/Windows NT 6\.1/i.test(ua)) return 'Windows 7';
+  if (/Windows/i.test(ua)) return 'Windows';
+  const androidMatch = ua.match(/Android\s+([0-9\.]+)/i);
+  if (androidMatch) return `Android ${androidMatch[1]}`;
+  if (/Android/i.test(ua)) return 'Android';
+  const iosMatch = ua.match(/OS\s+([0-9\_]+)/i);
+  if (iosMatch) return `iOS ${iosMatch[1].replace(/_/g, '.')}`;
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+  if (/Macintosh|Mac OS X/i.test(ua)) return 'macOS';
+  if (/Linux/i.test(ua)) return 'Linux';
+  return 'OS Lainnya';
+}
+
+export function getDetailedBrowser(ua: string): string {
+  const edgeMatch = ua.match(/Edg\/([0-9]+)/i);
+  if (edgeMatch) return `Microsoft Edge ${edgeMatch[1]}`;
+  const samsungMatch = ua.match(/SamsungBrowser\/([0-9]+)/i);
+  if (samsungMatch) return `Samsung Internet ${samsungMatch[1]}`;
+  const operaMatch = ua.match(/(?:OPR|Opera)\/([0-9]+)/i);
+  if (operaMatch) return `Opera ${operaMatch[1]}`;
+  const firefoxMatch = ua.match(/Firefox\/([0-9]+)/i);
+  if (firefoxMatch) return `Mozilla Firefox ${firefoxMatch[1]}`;
+  const chromeMatch = ua.match(/Chrome\/([0-9]+)/i);
+  if (chromeMatch && !ua.includes('Edg') && !ua.includes('OPR')) return `Google Chrome ${chromeMatch[1]}`;
+  const safariMatch = ua.match(/Version\/([0-9]+).*Safari/i);
+  if (safariMatch) return `Apple Safari ${safariMatch[1]}`;
+  if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return 'Apple Safari';
+  return 'Google Chrome';
+}
+
+export function formatVisitorIdDisplay(rawId?: string): string {
+  if (!rawId) return 'VIS-ANON';
+  if (rawId.startsWith('VIS-')) return rawId;
+  // Convert standard ID hash to 6-char clean alphanumeric
+  let hash = 0;
+  for (let i = 0; i < rawId.length; i++) {
+    hash = (hash * 31 + rawId.charCodeAt(i)) >>> 0;
+  }
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  let temp = hash;
+  for (let i = 0; i < 6; i++) {
+    result += chars[temp % chars.length];
+    temp = Math.floor(temp / chars.length) + (i * 7);
+  }
+  return `VIS-${result.slice(0, 6)}`;
+}
+
 function getBrowserName(ua: string): string {
-  if (ua.includes('Firefox')) return 'Mozilla Firefox';
-  if (ua.includes('SamsungBrowser')) return 'Samsung Internet';
-  if (ua.includes('Opera') || ua.includes('OPR')) return 'Opera';
-  if (ua.includes('Edge') || ua.includes('Edg')) return 'Microsoft Edge';
-  if (ua.includes('Chrome')) return 'Google Chrome';
-  if (ua.includes('Safari')) return 'Apple Safari';
-  return 'Web Browser';
+  return getDetailedBrowser(ua);
 }
 
 function getDeviceType(ua: string): 'Mobile' | 'Desktop' | 'Tablet' {
@@ -167,11 +285,18 @@ export function trackRealVisitor(
     const ua = navigator.userAgent || '';
     const device = getDeviceType(ua);
     const browser = getBrowserName(ua);
+    const os = getDetailedOS(ua);
     const screen = `${window.screen.width}x${window.screen.height}`;
     const referrer = document.referrer ? new URL(document.referrer).hostname : 'Langsung (Direct)';
     const language = navigator.language || 'id-ID';
 
     const jakartaNow = getJakartaTimestamp();
+
+    // Retrieve cached ISP and Location info (or fetch in background for future visits)
+    let geoInfo = getCachedGeoIsp();
+    if (!geoInfo) {
+      fetchGeoIspAsync().catch(() => {});
+    }
 
     const record: VisitorRecord = {
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -180,6 +305,11 @@ export function trackRealVisitor(
       page: cleanPage,
       device,
       browser,
+      os,
+      isp: geoInfo?.isp || undefined,
+      city: geoInfo?.city || undefined,
+      region: geoInfo?.region || undefined,
+      country: geoInfo?.country || undefined,
       referrer,
       screen,
       language,
@@ -207,6 +337,10 @@ export function trackRealVisitor(
           ...existingRecord,
           hits: newHits,
           page: pageArr.join(', '),
+          isp: existingRecord.isp || geoInfo?.isp,
+          city: existingRecord.city || geoInfo?.city,
+          region: existingRecord.region || geoInfo?.region,
+          os: existingRecord.os || os,
           lastTime: jakartaNow,
           timestamp: jakartaNow,
         };
@@ -254,8 +388,12 @@ export function trackRealVisitor(
           visitorId,
           timestamp: jakartaNow,
           page: cleanPage,
-          device,
+          device: `${device} (${os})`,
           browser,
+          isp: geoInfo?.isp || '',
+          city: geoInfo?.city || '',
+          region: geoInfo?.region || '',
+          location: geoInfo?.city ? `${geoInfo.city}, ${geoInfo.region || 'ID'}` : '',
           referrer,
           eventType,
           screen,
@@ -282,8 +420,11 @@ export function trackRealVisitor(
         body: JSON.stringify({
           visitorId,
           page,
-          device,
+          device: `${device} (${os})`,
           browser,
+          isp: geoInfo?.isp,
+          city: geoInfo?.city,
+          region: geoInfo?.region,
           referrer,
           eventType,
         }),
@@ -521,11 +662,11 @@ export function getLocalAnalyticsSummary(): LocalAnalyticsSummary {
     return calculateAnalyticsSummaryFromLogs(logs);
   } catch {
     return {
-      totalViews: 1,
-      uniqueVisitors: 1,
-      devicePercentages: { mobile: 100, desktop: 0, tablet: 0, mobileCount: 1, desktopCount: 0, tabletCount: 0 },
-      topPages: [{ page: '/', count: 1 }],
-      topBrowsers: [{ browser: 'Google Chrome', count: 1 }],
+      totalViews: 0,
+      uniqueVisitors: 0,
+      devicePercentages: { mobile: 0, desktop: 0, tablet: 0, mobileCount: 0, desktopCount: 0, tabletCount: 0 },
+      topPages: [],
+      topBrowsers: [],
       dailyCounts: [],
       logs: [],
     };

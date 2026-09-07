@@ -59,11 +59,20 @@ async function syncWithGoogleSheet(): Promise<AppData | null> {
           ...appData,
           packages: Array.isArray(d.packages) && d.packages.length > 0 ? d.packages : appData.packages,
           channelRates: Array.isArray(d.channelRates) && d.channelRates.length > 0 ? d.channelRates : appData.channelRates,
-          discountConfig: d.discountConfig ? { ...appData.discountConfig, ...d.discountConfig } : appData.discountConfig,
+          discountConfig: d.discountConfig ? {
+            ...appData.discountConfig,
+            ...d.discountConfig,
+            monetaryTiers: Array.isArray(d.discountConfig.monetaryTiers) && d.discountConfig.monetaryTiers.length > 0
+              ? d.discountConfig.monetaryTiers
+              : (typeof d.discountConfig.monetaryTiers === 'string'
+                  ? (() => { try { return JSON.parse(d.discountConfig.monetaryTiers); } catch { return appData.discountConfig.monetaryTiers; } })()
+                  : appData.discountConfig.monetaryTiers)
+          } : appData.discountConfig,
           companyConfig: d.companyConfig ? { ...appData.companyConfig, ...d.companyConfig } : appData.companyConfig,
           offices: Array.isArray(d.offices) ? d.offices : (appData.offices || []),
           testimonials: Array.isArray(d.testimonials) ? d.testimonials : appData.testimonials,
           orders: Array.isArray(d.orders) ? d.orders : appData.orders,
+          analyticsLogs: Array.isArray(d.analyticsLogs) ? d.analyticsLogs : appData.analyticsLogs,
           lastUpdated: new Date().toISOString(),
         };
         saveDataToDisk();
@@ -196,6 +205,9 @@ async function startServer() {
     device: string;
     browser: string;
     referrer: string;
+    isp?: string;
+    city?: string;
+    region?: string;
     eventType?: string;
   }
   const serverVisitorLogs: ServerVisitorLog[] = [];
@@ -232,6 +244,9 @@ async function startServer() {
         device: body.device || 'Desktop',
         browser: body.browser || 'Web Browser',
         referrer: body.referrer || 'Langsung',
+        isp: body.isp,
+        city: body.city,
+        region: body.region,
         eventType: body.eventType || 'pageview',
       };
 
@@ -253,6 +268,10 @@ async function startServer() {
             page: log.page,
             device: log.device,
             browser: log.browser,
+            isp: log.isp || '',
+            city: log.city || '',
+            region: log.region || '',
+            location: log.city ? `${log.city}, ${log.region || 'ID'}` : '',
             referrer: log.referrer,
             eventType: log.eventType,
             screen: body.screen || 'Unknown',

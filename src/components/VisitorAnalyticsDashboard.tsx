@@ -2,23 +2,25 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   ExternalLink,
-  CheckCircle2,
   Activity,
   Users,
   Eye,
   Smartphone,
   Globe2,
   Clock,
-  ShieldCheck,
   TrendingUp,
   Laptop,
+  Monitor,
+  Tablet,
+  Wifi,
+  MapPin,
+  Copy,
+  Check,
   RefreshCw,
   Zap,
   Radio,
   Trash2,
-  Filter,
   BarChart2,
-  ArrowUpRight,
   Database,
   FileSpreadsheet,
   ChevronDown,
@@ -28,57 +30,203 @@ import {
   clearLocalAnalytics,
   calculateAnalyticsSummaryFromLogs,
   fetchRemoteAnalyticsFromSpreadsheet,
+  formatVisitorIdDisplay,
+  getDetailedOS,
+  getDetailedBrowser,
   VisitorRecord,
 } from '../utils/analyticsTracker';
 
-// Helper to format clean, human-readable timestamp
-function formatCleanTimestamp(ts: string | undefined): string {
-  if (!ts) return '-';
-  
-  // Extract time (HH:MM:SS or HH:MM)
-  const timeMatch = ts.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
-  const timePart = timeMatch ? timeMatch[1] : '';
+// Helper to format table timestamp into simple clean "DD/MM/YYYY, HH:mm:ss WIB" (Jakarta Time)
+function formatTableTimestamp(ts: string | undefined): string {
+  if (!ts) {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hour = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const sec = String(now.getSeconds()).padStart(2, '0');
+    return `${day}/${month}/${year}, ${hour}:${min}:${sec} WIB`;
+  }
 
-  // Check for date part
-  let datePart = '';
-  if (ts.includes('GMT') || ts.includes('Western Indonesia Time') || !isNaN(Date.parse(ts.replace(/\(.*\)/, '')))) {
-    try {
-      const cleanTs = ts.split(' GMT')[0].replace(/\d{1,2}:\d{2}:\d{2}.*$/, '').trim();
-      const d = new Date(cleanTs || ts);
-      if (!isNaN(d.getTime())) {
-        const now = new Date();
-        if (d.toDateString() === now.toDateString()) {
-          datePart = 'Hari ini';
-        } else {
-          datePart = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-        }
+  try {
+    const raw = ts.trim();
+
+    // 1. Check for text month formats like "Mon Sep 07 2026 00:00:00 GMT+0700 (Western Indonesia Time) 15:35:33 WIB"
+    const monthMap: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', mei: '05',
+      jun: '06', jul: '07', aug: '08', ags: '08', sep: '09', oct: '10', okt: '10',
+      nov: '11', dec: '12', des: '12',
+    };
+
+    // Find any time in the string, preferring a non-00:00:00 time (e.g. trailing time or inline time)
+    const allTimes = Array.from(raw.matchAll(/(?:^|[\s,T])(\d{1,2}[:\.]\d{2}(?:[:\.]\d{2})?)/g)).map((m) => m[1]);
+    let targetTime = allTimes.find((t) => !t.startsWith('00:00') && !t.startsWith('0:00')) || allTimes[allTimes.length - 1] || '00:00:00';
+    targetTime = targetTime.replace(/\./g, ':');
+    if (targetTime.split(':').length === 2) targetTime += ':00';
+    const timeParts = targetTime.split(':');
+    const cleanTime = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}:${(timeParts[2] || '00').padStart(2, '0')}`;
+
+    const textDateMatch = raw.match(/([A-Za-z]{3,4})\s+(\d{1,2})\s+(\d{4})/i) ||
+                          raw.match(/(\d{1,2})\s+([A-Za-z]{3,4})\s+(\d{4})/i);
+
+    if (textDateMatch) {
+      let day = '';
+      let month = '';
+      let year = '';
+
+      if (isNaN(Number(textDateMatch[1]))) {
+        // e.g. "Sep 07 2026"
+        const mKey = textDateMatch[1].slice(0, 3).toLowerCase();
+        month = monthMap[mKey] || '01';
+        day = textDateMatch[2].padStart(2, '0');
+        year = textDateMatch[3];
+      } else {
+        // e.g. "07 Sep 2026"
+        day = textDateMatch[1].padStart(2, '0');
+        const mKey = textDateMatch[2].slice(0, 3).toLowerCase();
+        month = monthMap[mKey] || '01';
+        year = textDateMatch[3];
       }
-    } catch {}
-  }
 
-  if (!datePart) {
-    const dMatch = ts.match(/(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)/);
-    if (dMatch) datePart = dMatch[1];
-  }
+      return `${day}/${month}/${year}, ${cleanTime} WIB`;
+    }
 
-  if (datePart && timePart) return `${datePart}, ${timePart} WIB`;
-  if (timePart) return `${timePart} WIB`;
-  if (ts.length > 20) return ts.slice(0, 20);
-  return ts;
+    // 2. Standard DD/MM/YYYY, HH:mm:ss or DD-MM-YYYY HH:mm:ss
+    const dmyMatch = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})[,\s]+(\d{1,2})[:\.](\d{1,2})(?:[:\.](\d{1,2}))?/);
+    if (dmyMatch) {
+      const day = dmyMatch[1].padStart(2, '0');
+      const month = dmyMatch[2].padStart(2, '0');
+      let year = dmyMatch[3];
+      if (year.length === 2) year = `20${year}`;
+      const hour = dmyMatch[4].padStart(2, '0');
+      const min = dmyMatch[5].padStart(2, '0');
+      const sec = (dmyMatch[6] || '00').padStart(2, '0');
+      return `${day}/${month}/${year}, ${hour}:${min}:${sec} WIB`;
+    }
+
+    // 3. ISO format YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm:ss
+    const isoMatch = raw.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[T\s]+(\d{1,2})[:\.](\d{1,2})(?:[:\.](\d{1,2}))?/);
+    if (isoMatch) {
+      const year = isoMatch[1];
+      const month = isoMatch[2].padStart(2, '0');
+      const day = isoMatch[3].padStart(2, '0');
+      const hour = isoMatch[4].padStart(2, '0');
+      const min = isoMatch[5].padStart(2, '0');
+      const sec = (isoMatch[6] || '00').padStart(2, '0');
+      return `${day}/${month}/${year}, ${hour}:${min}:${sec} WIB`;
+    }
+
+    // 4. Fallback Date parse (stripping timezone text comments)
+    const cleanDateStr = raw
+      .replace(/\s*\(Western Indonesia Time\)/gi, '')
+      .replace(/\s*\(WIB\)/gi, '')
+      .replace(/\s*WIB/gi, '')
+      .trim();
+
+    const d = new Date(cleanDateStr);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hour = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      const sec = String(d.getSeconds()).padStart(2, '0');
+      return `${day}/${month}/${year}, ${hour}:${min}:${sec} WIB`;
+    }
+  } catch {}
+
+  // 5. Minimal clean fallback if parse fails
+  const safeFallback = ts
+    .replace(/\s*\(Western Indonesia Time\)/gi, '')
+    .replace(/00:00:00\s*GMT\+0700/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return safeFallback.endsWith('WIB') ? safeFallback : `${safeFallback} WIB`;
 }
 
-// Helper to translate route paths to friendly labels
-function getFriendlyPageName(path: string): string {
-  const clean = path.trim();
-  if (clean === '/' || clean.toLowerCase().includes('beranda')) return 'Beranda';
-  if (clean.includes('paket-langganan')) return 'Paket Langganan';
-  if (clean.includes('kalkulator-biaya')) return 'Kalkulator Biaya';
-  if (clean.includes('testimoni')) return 'Testimoni & Ulasan';
-  if (clean.includes('chat-konsultasi')) return 'Konsultasi WA';
-  if (clean.includes('tabel-matriks')) return 'Tabel Matriks';
-  if (clean.includes('inventori-myads')) return 'Inventori MyAds';
-  if (clean.includes('lokasi-kantor')) return 'Lokasi Kantor';
-  return clean.length > 25 ? clean.slice(0, 25) + '...' : clean;
+// Helper for friendly page name formatted with clean label
+function getPagePill(rawPage: string | undefined): string {
+  const p = (rawPage || '/').trim();
+  if (p === '/' || p.toLowerCase().includes('beranda') || p.toLowerCase() === '/akardaya-myads/' || p.toLowerCase() === '/akardaya-myads') {
+    return 'Beranda Utama';
+  }
+  if (p.includes('paket-langganan') || p.includes('paket')) return 'Paket Langganan';
+  if (p.includes('kalkulator') || p.includes('simulasi')) return 'Kalkulator Biaya';
+  if (p.includes('testimoni') || p.includes('ulasan')) return 'Testimoni & Ulasan';
+  if (p.includes('inventori') || p.includes('myads')) return 'Inventori MyAds';
+  if (p.includes('matriks') || p.includes('fitur')) return 'Tabel Matriks';
+  if (p.includes('lokasi') || p.includes('kantor') || p.includes('cabang')) return 'Lokasi Kantor';
+  if (p.includes('chat') || p.includes('konsultasi') || p.includes('whatsapp')) return 'Konsultasi WA';
+  if (p.includes('pesanan') || p.includes('order')) return 'Form Order Iklan';
+  return p.length > 20 ? p.slice(0, 20) + '...' : p;
+}
+
+// Helper for device, OS, and browser details from real log
+function getDeviceDetails(log: VisitorRecord) {
+  const dev = (log.device || '').toLowerCase();
+  const isMobile = dev.includes('mob') || dev.includes('hp') || dev.includes('phone') || dev.includes('android') || dev.includes('iphone');
+  const isTablet = dev.includes('tab') || dev.includes('ipad');
+
+  let category = 'PC / Desktop';
+  if (isTablet) category = 'Tablet';
+  else if (isMobile) category = 'Mobile';
+
+  let os = log.os;
+  if (!os || os === 'OS Lainnya') {
+    if (category === 'Mobile') {
+      os = dev.includes('iphone') ? 'iOS' : 'Android';
+    } else if (category === 'Tablet') {
+      os = dev.includes('ipad') ? 'iPadOS' : 'Android Tab';
+    } else {
+      os = log.device || 'Windows / macOS';
+    }
+  }
+
+  const browser = log.browser || 'Web Browser';
+
+  return {
+    category,
+    os,
+    browser,
+    isMobile,
+    isTablet,
+  };
+}
+
+// Helper for ISP Provider from real database
+function getIspDetails(log: VisitorRecord): string {
+  if (log.isp && log.isp.trim()) return log.isp;
+  return '-';
+}
+
+// Helper for City & Location from real database
+function getLocationDetails(log: VisitorRecord): { city: string; region: string } {
+  if (log.city && log.region) {
+    return { city: log.city, region: log.region };
+  }
+  if (log.city) {
+    return { city: log.city, region: log.region || 'Indonesia' };
+  }
+  if (log.country) {
+    return { city: log.country, region: 'WIB' };
+  }
+  return { city: 'Indonesia', region: 'WIB' };
+}
+
+// Helper for Referrer from real database
+function getReferrerDisplay(rawRef: string | undefined): string {
+  if (!rawRef || rawRef.trim() === '' || rawRef.toLowerCase().includes('langsung') || rawRef.toLowerCase().includes('direct')) {
+    return 'Akses Langsung (Direct)';
+  }
+  const low = rawRef.toLowerCase();
+  if (low.includes('google')) return 'Google Search';
+  if (low.includes('instagram')) return 'Instagram';
+  if (low.includes('facebook') || low.includes('fb')) return 'Facebook';
+  if (low.includes('whatsapp') || low.includes('wa.me')) return 'WhatsApp';
+  if (low.includes('tiktok')) return 'TikTok';
+  return rawRef.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 }
 
 export const VisitorAnalyticsDashboard: React.FC = () => {
@@ -103,6 +251,19 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const [recentLogs, setRecentLogs] = useState<VisitorRecord[]>([]);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = (idStr: string) => {
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(idStr);
+      }
+    } catch {}
+    setCopiedId(idStr);
+    setTimeout(() => {
+      setCopiedId(null);
+    }, 2000);
+  };
 
   // Fetch actual recorded visitor data from Google Spreadsheet first, fallback to server & local
   const refreshAnalyticsData = useCallback(async () => {
@@ -341,309 +502,328 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. MAIN CONTENT GRID */}
+      {/* 3. CHARTS & BREAKDOWNS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (2 Cols): Daily Visits Chart & Real Live Log Feed */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Daily Visits Bar Chart */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <BarChart2 className="w-4 h-4 text-red-600 dark:text-red-400" />
-                  Grafik Kunjungan Riil Harian (7 Hari Terakhir)
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Total hits tayangan halaman yang dicatat langsung dari browser pengunjung
-                </p>
-              </div>
-            </div>
-
-            <div className="h-44 w-full flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-100 dark:border-slate-800">
-              {dailyCounts.length > 0 ? (
-                dailyCounts.map((item, index) => {
-                  const heightPercent = Math.max(12, Math.round((item.count / maxChartCount) * 100));
-                  return (
-                    <div key={index} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
-                      <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {item.count}
-                      </div>
-                      <div
-                        style={{ height: `${heightPercent}%` }}
-                        className="w-full max-w-[36px] bg-gradient-to-t from-red-600 to-rose-500 dark:from-red-700 dark:to-rose-600 rounded-t-lg transition-all group-hover:brightness-110 relative"
-                      >
-                        <div className="absolute inset-x-0 top-0 h-1 bg-white/40 rounded-t-lg"></div>
-                      </div>
-                      <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[50px]">
-                        {item.label}
-                      </span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
-                  Belum ada log harian yang tersimpan
-                </div>
-              )}
+        {/* Left: Daily Visits Bar Chart (2 Cols) */}
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                Grafik Kunjungan Riil Harian (7 Hari Terakhir)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Total hits tayangan halaman yang dicatat langsung dari browser pengunjung
+              </p>
             </div>
           </div>
 
-          {/* Real Recent Log Feed */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-500 animate-pulse" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Log Kunjungan Nyata (Tersinkron Database Spreadsheet)
-                </h3>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
-                  {recentLogs.length} Baris Terbaca
-                </span>
-                {recentLogs.length > 0 && (
-                  <button
-                    onClick={handleClearLogs}
-                    className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-red-600 transition-colors"
-                    title="Bersihkan Log Lokal"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[380px] overflow-y-auto pr-1">
-              {recentLogs.length > 0 ? (
-                recentLogs.map((log, index) => {
-                  const logId = log.id || `log_${index}`;
-                  const rawPages = (log.page || '/').split(',').map((p) => p.trim()).filter(Boolean);
-                  const primaryPage = rawPages[0] || '/';
-                  const hasMultiplePages = rawPages.length > 1;
-                  const isExpanded = expandedLogId === logId;
-
-                  return (
-                    <div
-                      key={logId}
-                      className="py-2.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl transition-all"
-                    >
-                      <div className="flex items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          {/* Device Icon */}
-                          <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
-                            {log.device?.toLowerCase().includes('mobile') || log.device?.toLowerCase().includes('hp') ? (
-                              <Smartphone className="w-3.5 h-3.5 text-blue-500" />
-                            ) : (
-                              <Laptop className="w-3.5 h-3.5 text-purple-500" />
-                            )}
-                          </div>
-
-                          {/* Main Row Content */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {/* Primary Page Chip */}
-                              <span
-                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium text-[11px] text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 truncate max-w-[150px] sm:max-w-[200px]"
-                                title={primaryPage}
-                              >
-                                {getFriendlyPageName(primaryPage)}
-                              </span>
-
-                              {/* Multi-page Expand Toggle Button */}
-                              {hasMultiplePages && (
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedLogId(isExpanded ? null : logId)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
-                                  title="Klik untuk melihat seluruh halaman yang dikunjungi"
-                                >
-                                  <span>+{rawPages.length - 1} hal</span>
-                                  <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                </button>
-                              )}
-
-                              {/* Hits Badge */}
-                              {log.hits && log.hits > 1 ? (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold border border-blue-200/80 dark:border-blue-800/60">
-                                  <TrendingUp className="w-2.5 h-2.5" />
-                                  <span>{log.hits}x Kunjungan</span>
-                                </span>
-                              ) : null}
-
-                              {/* Order Event Badge */}
-                              {log.eventType === 'order_submit' && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200/80 dark:border-emerald-800/60">
-                                  🛒 Order
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Compact Metadata Row */}
-                            <div className="text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 text-[11px] truncate">
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">{log.device || 'Perangkat'}</span>
-                              <span>•</span>
-                              <span>{log.browser || 'Browser'}</span>
-                              {log.referrer && log.referrer !== 'Langsung' && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-slate-400 truncate max-w-[120px]" title={log.referrer}>
-                                    {log.referrer.replace(/^https?:\/\//, '')}
-                                  </span>
-                                </>
-                              )}
-                              {log.visitorId && (
-                                <>
-                                  <span>•</span>
-                                  <span className="font-mono text-[10px] text-slate-400">ID: {log.visitorId.slice(0, 8)}...</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Timestamp on Right */}
-                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0 text-right whitespace-nowrap pl-2">
-                          {formatCleanTimestamp(log.timestamp)}
-                        </div>
-                      </div>
-
-                      {/* Dropdown Expand for Multi-Pages */}
-                      {isExpanded && hasMultiplePages && (
-                        <div className="mt-2 pl-9 pr-1 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px] space-y-1.5">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                            <span>Daftar {rawPages.length} Halaman Yang Dikunjungi Sesi Ini:</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {rawPages.map((p, pIdx) => (
-                              <span
-                                key={pIdx}
-                                className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[10px] font-mono shadow-2xs"
-                              >
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+          <div className="h-44 w-full flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-100 dark:border-slate-800">
+            {dailyCounts.length > 0 ? (
+              dailyCounts.map((item, index) => {
+                const heightPercent = Math.max(12, Math.round((item.count / maxChartCount) * 100));
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {item.count}
                     </div>
-                  );
-                })
-              ) : (
-                <div className="py-8 text-center text-xs text-slate-400 space-y-2">
-                  <p>Belum ada data log yang dimuat. Klik tombol <strong>"Sinkronkan Data"</strong> di kanan atas untuk menarik log dari spreadsheet.</p>
-                </div>
-              )}
-            </div>
+                    <div
+                      style={{ height: `${heightPercent}%` }}
+                      className="w-full max-w-[36px] bg-gradient-to-t from-red-600 to-rose-500 dark:from-red-700 dark:to-rose-600 rounded-t-lg transition-all group-hover:brightness-110 relative"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1 bg-white/40 rounded-t-lg"></div>
+                    </div>
+                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[50px]">
+                      {item.label}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                Belum ada log harian yang tersimpan
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right Column (1 Col): Device & Browser Breakdown */}
-        <div className="space-y-6">
-          {/* Device Breakdown */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
-              <Smartphone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              Perangkat Pengunjung (Riil)
-            </h3>
+        {/* Right: Device Breakdown (1 Col) */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            Perangkat Pengunjung (Riil)
+          </h3>
 
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  <span>Smartphone / Mobile</span>
-                  <span>
-                    {deviceBreakdown.mobile}% ({deviceBreakdown.mobileCount} hits)
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    style={{ width: `${deviceBreakdown.mobile}%` }}
-                    className="h-full bg-red-600 rounded-full transition-all"
-                  />
-                </div>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <span>Smartphone / Mobile</span>
+                <span>
+                  {deviceBreakdown.mobile}% ({deviceBreakdown.mobileCount} hits)
+                </span>
               </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  <span>Desktop / PC</span>
-                  <span>
-                    {deviceBreakdown.desktop}% ({deviceBreakdown.desktopCount} hits)
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    style={{ width: `${deviceBreakdown.desktop}%` }}
-                    className="h-full bg-blue-600 rounded-full transition-all"
-                  />
-                </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  style={{ width: `${deviceBreakdown.mobile}%` }}
+                  className="h-full bg-red-600 rounded-full transition-all"
+                />
               </div>
+            </div>
 
-              <div>
-                <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  <span>Tablet / Lainnya</span>
-                  <span>
-                    {deviceBreakdown.tablet}% ({deviceBreakdown.tabletCount} hits)
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    style={{ width: `${deviceBreakdown.tablet}%` }}
-                    className="h-full bg-purple-600 rounded-full transition-all"
-                  />
-                </div>
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <span>Desktop / PC</span>
+                <span>
+                  {deviceBreakdown.desktop}% ({deviceBreakdown.desktopCount} hits)
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  style={{ width: `${deviceBreakdown.desktop}%` }}
+                  className="h-full bg-blue-600 rounded-full transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <span>Tablet / Lainnya</span>
+                <span>
+                  {deviceBreakdown.tablet}% ({deviceBreakdown.tabletCount} hits)
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  style={{ width: `${deviceBreakdown.tablet}%` }}
+                  className="h-full bg-purple-600 rounded-full transition-all"
+                />
               </div>
             </div>
           </div>
 
-          {/* Top Pages */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
-              <Globe2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              Halaman Paling Sering Dibuka
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+            <span>Browser Dominan:</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200">
+              {topBrowsers[0]?.browser || 'Google Chrome'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. DAFTAR LOG KUNJUNGAN (FULL-WIDTH REDESIGNED TABLE) */}
+      <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+        {/* Table Card Header */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex items-center justify-center text-red-600 dark:text-red-400">
+              <Radio className="w-4 h-4 text-red-600 dark:text-red-400 animate-pulse" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Daftar Log Kunjungan ({recentLogs.length} Data)
             </h3>
-            <div className="space-y-2">
-              {topPages.length > 0 ? (
-                topPages.map((tp, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60"
-                  >
-                    <span className="font-mono text-slate-700 dark:text-slate-300 truncate max-w-[170px]">
-                      {tp.page}
-                    </span>
-                    <span className="font-bold text-red-600 dark:text-red-400">{tp.count}x dibuka</span>
-                  </div>
-                ))
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400 dark:text-slate-500 font-medium hidden sm:inline">
+              Diurutkan dari kunjungan terbaru
+            </span>
+            {recentLogs.length > 0 && (
+              <button
+                onClick={handleClearLogs}
+                className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-slate-400 hover:text-red-600 transition-colors"
+                title="Bersihkan Log Lokal"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable Table Container */}
+        <div className="overflow-x-auto w-full -mx-1 sm:mx-0">
+          <table className="w-full text-left border-collapse min-w-[1020px]">
+            <thead>
+              <tr className="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-50/50 dark:bg-slate-800/30">
+                <th className="py-3 px-3.5">WAKTU KUNJUNGAN</th>
+                <th className="py-3 px-3.5">ID PENGUNJUNG</th>
+                <th className="py-3 px-3.5">FREKUENSI (HITS)</th>
+                <th className="py-3 px-3.5">PERANGKAT & BROWSER</th>
+                <th className="py-3 px-3.5">ISP PROVIDER</th>
+                <th className="py-3 px-3.5">KOTA / LOKASI</th>
+                <th className="py-3 px-3.5">ALUR / HALAMAN DIAKSES</th>
+                <th className="py-3 px-3.5">SUMBER / REFERRER</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              {recentLogs.length > 0 ? (
+                recentLogs.map((log, index) => {
+                  const logId = log.id || `log_${index}`;
+                  const displayId = formatVisitorIdDisplay(log.visitorId || log.id);
+                  const formattedTime = formatTableTimestamp(log.timestamp);
+                  const hitsCount = Math.max(log.hits || 1, 1);
+                  const deviceInfo = getDeviceDetails(log);
+                  const ispName = getIspDetails(log);
+                  const location = getLocationDetails(log);
+
+                  const rawPages = (log.page || '/').split(',').map((p) => p.trim()).filter(Boolean);
+                  const primaryPage = rawPages[0] || '/';
+                  const pageBadge = getPagePill(primaryPage);
+                  const hasMultiplePages = rawPages.length > 1;
+                  const isExpanded = expandedLogId === logId;
+                  const referrerDisplay = getReferrerDisplay(log.referrer);
+
+                  return (
+                    <React.Fragment key={logId}>
+                      <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group">
+                        {/* 1. WAKTU KUNJUNGAN */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap text-xs text-slate-700 dark:text-slate-300">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{formattedTime}</span>
+                          </div>
+                        </td>
+
+                        {/* 2. ID PENGUNJUNG */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono font-bold text-xs shadow-2xs">
+                            <span>{displayId}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyId(displayId)}
+                              className="text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
+                              title="Salin ID Pengunjung"
+                            >
+                              {copiedId === displayId ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* 3. FREKUENSI (HITS) */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-300/80 dark:border-amber-700/80 text-amber-800 dark:text-amber-300 font-bold text-xs shadow-2xs">
+                            <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>{hitsCount}x Hits</span>
+                          </div>
+                        </td>
+
+                        {/* 4. PERANGKAT & BROWSER */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                              {deviceInfo.isMobile ? (
+                                <Smartphone className="w-4 h-4" />
+                              ) : deviceInfo.isTablet ? (
+                                <Tablet className="w-4 h-4" />
+                              ) : (
+                                <Laptop className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1 leading-tight">
+                                <span>{deviceInfo.category}</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">{deviceInfo.os}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                {deviceInfo.browser}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 5. ISP PROVIDER */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-100 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                              <Wifi className="w-4 h-4" />
+                            </div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">
+                              {ispName}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 6. KOTA / LOKASI */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          <div className="flex items-start gap-1.5">
+                            <MapPin className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                                {location.city}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
+                                {location.region}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 7. ALUR / HALAMAN DIAKSES */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold text-xs shadow-2xs">
+                              {pageBadge}
+                            </span>
+                            {hasMultiplePages && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedLogId(isExpanded ? null : logId)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+                                title="Klik untuk melihat seluruh halaman"
+                              >
+                                <span>+{rawPages.length - 1}</span>
+                                <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 8. SUMBER / REFERRER */}
+                        <td className="py-3.5 px-3.5 whitespace-nowrap text-xs text-slate-700 dark:text-slate-300 font-medium">
+                          {referrerDisplay}
+                        </td>
+                      </tr>
+
+                      {/* Dropdown Multi-Pages Expand */}
+                      {isExpanded && hasMultiplePages && (
+                        <tr className="bg-slate-50/90 dark:bg-slate-800/60">
+                          <td colSpan={8} className="py-2.5 px-6">
+                            <div className="text-[11px] space-y-1.5">
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                Seluruh {rawPages.length} Halaman Yang Dikunjungi Sesi Ini:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {rawPages.map((p, pIdx) => (
+                                  <span
+                                    key={pIdx}
+                                    className="px-2.5 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[10px] font-mono shadow-2xs"
+                                  >
+                                    {p}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
               ) : (
-                <div className="text-xs text-slate-400 py-2">Belum ada data halaman</div>
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-xs text-slate-400">
+                    <p>Belum ada log kunjungan yang tersimpan. Klik <strong>"Sinkronkan Data"</strong> di atas untuk memuat dari spreadsheet.</p>
+                  </td>
+                </tr>
               )}
-            </div>
-          </div>
-
-          {/* Top Browsers */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
-              <Eye className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              Browser Pengunjung Nyata
-            </h3>
-            <div className="space-y-2">
-              {topBrowsers.length > 0 ? (
-                topBrowsers.map((tb, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60"
-                  >
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">{tb.browser}</span>
-                    <span className="font-bold text-slate-500">{tb.count} sesi</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-slate-400 py-2">Belum ada data browser</div>
-              )}
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   );
 };
+
