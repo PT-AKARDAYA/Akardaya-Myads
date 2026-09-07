@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   Database,
   FileSpreadsheet,
+  ChevronDown,
 } from 'lucide-react';
 import {
   getLocalAnalyticsSummary,
@@ -29,6 +30,56 @@ import {
   fetchRemoteAnalyticsFromSpreadsheet,
   VisitorRecord,
 } from '../utils/analyticsTracker';
+
+// Helper to format clean, human-readable timestamp
+function formatCleanTimestamp(ts: string | undefined): string {
+  if (!ts) return '-';
+  
+  // Extract time (HH:MM:SS or HH:MM)
+  const timeMatch = ts.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+  const timePart = timeMatch ? timeMatch[1] : '';
+
+  // Check for date part
+  let datePart = '';
+  if (ts.includes('GMT') || ts.includes('Western Indonesia Time') || !isNaN(Date.parse(ts.replace(/\(.*\)/, '')))) {
+    try {
+      const cleanTs = ts.split(' GMT')[0].replace(/\d{1,2}:\d{2}:\d{2}.*$/, '').trim();
+      const d = new Date(cleanTs || ts);
+      if (!isNaN(d.getTime())) {
+        const now = new Date();
+        if (d.toDateString() === now.toDateString()) {
+          datePart = 'Hari ini';
+        } else {
+          datePart = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+        }
+      }
+    } catch {}
+  }
+
+  if (!datePart) {
+    const dMatch = ts.match(/(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)/);
+    if (dMatch) datePart = dMatch[1];
+  }
+
+  if (datePart && timePart) return `${datePart}, ${timePart} WIB`;
+  if (timePart) return `${timePart} WIB`;
+  if (ts.length > 20) return ts.slice(0, 20);
+  return ts;
+}
+
+// Helper to translate route paths to friendly labels
+function getFriendlyPageName(path: string): string {
+  const clean = path.trim();
+  if (clean === '/' || clean.toLowerCase().includes('beranda')) return 'Beranda';
+  if (clean.includes('paket-langganan')) return 'Paket Langganan';
+  if (clean.includes('kalkulator-biaya')) return 'Kalkulator Biaya';
+  if (clean.includes('testimoni')) return 'Testimoni & Ulasan';
+  if (clean.includes('chat-konsultasi')) return 'Konsultasi WA';
+  if (clean.includes('tabel-matriks')) return 'Tabel Matriks';
+  if (clean.includes('inventori-myads')) return 'Inventori MyAds';
+  if (clean.includes('lokasi-kantor')) return 'Lokasi Kantor';
+  return clean.length > 25 ? clean.slice(0, 25) + '...' : clean;
+}
 
 export const VisitorAnalyticsDashboard: React.FC = () => {
   const { data, activeUsers } = useApp();
@@ -51,6 +102,7 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const [dailyCounts, setDailyCounts] = useState<{ date: string; label: string; count: number }[]>([]);
   const [recentLogs, setRecentLogs] = useState<VisitorRecord[]>([]);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   // Fetch actual recorded visitor data from Google Spreadsheet first, fallback to server & local
   const refreshAnalyticsData = useCallback(async () => {
@@ -362,75 +414,121 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[360px] overflow-y-auto pr-1">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[380px] overflow-y-auto pr-1">
               {recentLogs.length > 0 ? (
-                recentLogs.map((log, index) => (
-                  <div
-                    key={log.id || `log_${index}`}
-                    className="py-3 flex items-start justify-between gap-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-800/40 px-2 rounded-xl transition-colors"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 mt-0.5">
-                        {log.device?.toLowerCase().includes('mobile') || log.device?.toLowerCase().includes('hp') ? (
-                          <Smartphone className="w-4 h-4 text-blue-500" />
-                        ) : (
-                          <Laptop className="w-4 h-4 text-purple-500" />
-                        )}
-                      </div>
+                recentLogs.map((log, index) => {
+                  const logId = log.id || `log_${index}`;
+                  const rawPages = (log.page || '/').split(',').map((p) => p.trim()).filter(Boolean);
+                  const primaryPage = rawPages[0] || '/';
+                  const hasMultiplePages = rawPages.length > 1;
+                  const isExpanded = expandedLogId === logId;
 
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                          <span>
-                            Halaman:{' '}
-                            <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-red-600 dark:text-red-400 font-mono text-[11px]">
-                              {log.page}
-                            </code>
-                          </span>
-                          {log.hits && log.hits > 1 ? (
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 text-[10px] font-extrabold flex items-center gap-0.5">
-                              <TrendingUp className="w-2.5 h-2.5" />
-                              {log.hits}x Kunjungan Hari Ini
-                            </span>
-                          ) : null}
-                          {log.eventType === 'order_submit' && (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-bold">
-                              🛒 Order Dikirim
-                            </span>
-                          )}
-                        </div>
+                  return (
+                    <div
+                      key={logId}
+                      className="py-2.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          {/* Device Icon */}
+                          <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                            {log.device?.toLowerCase().includes('mobile') || log.device?.toLowerCase().includes('hp') ? (
+                              <Smartphone className="w-3.5 h-3.5 text-blue-500" />
+                            ) : (
+                              <Laptop className="w-3.5 h-3.5 text-purple-500" />
+                            )}
+                          </div>
 
-                        <div className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap text-[11px]">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">{log.device || 'Perangkat'}</span>
-                          <span>•</span>
-                          <span>{log.browser || 'Browser'}</span>
-                          <span>•</span>
-                          <span className="text-slate-400">{log.referrer || 'Langsung'}</span>
-                          {log.visitorId && (
-                            <>
+                          {/* Main Row Content */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {/* Primary Page Chip */}
+                              <span
+                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium text-[11px] text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 truncate max-w-[150px] sm:max-w-[200px]"
+                                title={primaryPage}
+                              >
+                                {getFriendlyPageName(primaryPage)}
+                              </span>
+
+                              {/* Multi-page Expand Toggle Button */}
+                              {hasMultiplePages && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedLogId(isExpanded ? null : logId)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                                  title="Klik untuk melihat seluruh halaman yang dikunjungi"
+                                >
+                                  <span>+{rawPages.length - 1} hal</span>
+                                  <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+                              )}
+
+                              {/* Hits Badge */}
+                              {log.hits && log.hits > 1 ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold border border-blue-200/80 dark:border-blue-800/60">
+                                  <TrendingUp className="w-2.5 h-2.5" />
+                                  <span>{log.hits}x Kunjungan</span>
+                                </span>
+                              ) : null}
+
+                              {/* Order Event Badge */}
+                              {log.eventType === 'order_submit' && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200/80 dark:border-emerald-800/60">
+                                  🛒 Order
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Compact Metadata Row */}
+                            <div className="text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 text-[11px] truncate">
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">{log.device || 'Perangkat'}</span>
                               <span>•</span>
-                              <span className="font-mono text-[10px] text-slate-400">ID: {log.visitorId.slice(0, 10)}...</span>
-                            </>
-                          )}
+                              <span>{log.browser || 'Browser'}</span>
+                              {log.referrer && log.referrer !== 'Langsung' && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-slate-400 truncate max-w-[120px]" title={log.referrer}>
+                                    {log.referrer.replace(/^https?:\/\//, '')}
+                                  </span>
+                                </>
+                              )}
+                              {log.visitorId && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono text-[10px] text-slate-400">ID: {log.visitorId.slice(0, 8)}...</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Timestamp on Right */}
+                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0 text-right whitespace-nowrap pl-2">
+                          {formatCleanTimestamp(log.timestamp)}
                         </div>
                       </div>
-                    </div>
 
-                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 shrink-0 mt-0.5 text-right">
-                      {log.timestamp && log.timestamp.includes('WIB')
-                        ? log.timestamp
-                        : !isNaN(new Date(log.timestamp).getTime())
-                        ? new Date(log.timestamp).toLocaleString('id-ID', {
-                            timeZone: 'Asia/Jakarta',
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                          }) + ' WIB'
-                        : log.timestamp}
+                      {/* Dropdown Expand for Multi-Pages */}
+                      {isExpanded && hasMultiplePages && (
+                        <div className="mt-2 pl-9 pr-1 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-[11px] space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <span>Daftar {rawPages.length} Halaman Yang Dikunjungi Sesi Ini:</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {rawPages.map((p, pIdx) => (
+                              <span
+                                key={pIdx}
+                                className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[10px] font-mono shadow-2xs"
+                              >
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="py-8 text-center text-xs text-slate-400 space-y-2">
                   <p>Belum ada data log yang dimuat. Klik tombol <strong>"Sinkronkan Data"</strong> di kanan atas untuk menarik log dari spreadsheet.</p>
