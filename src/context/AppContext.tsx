@@ -509,12 +509,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 3. Auto sync when user returns / focuses the browser tab
     const handleFocus = () => {
-      if (!isSyncPausedRef.current && !isAdminOpenRef.current) {
+      if (!isSyncPausedRef.current) {
         syncLatestDataRef.current(true);
       }
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isAdminOpenRef.current) {
+      if (document.visibilityState === 'visible' && !isSyncPausedRef.current) {
         syncLatestDataRef.current(true);
       }
     };
@@ -523,7 +523,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4. Background polling timer (Every 15 seconds) to fetch spreadsheet updates across all users
     const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isAdminOpenRef.current) {
+      if (document.visibilityState === 'visible' && !isSyncPausedRef.current) {
         syncLatestDataRef.current(true);
       }
     }, 15000);

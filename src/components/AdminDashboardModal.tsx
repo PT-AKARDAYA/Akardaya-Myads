@@ -91,20 +91,31 @@ export const AdminDashboardModal: React.FC = () => {
     };
 
     const handleFocusOut = () => {
-      // Allow slight delay to check if another input field was immediately focused
       setTimeout(() => {
         if (!isInputField(document.activeElement)) {
           setIsSyncPaused(false);
         }
-      }, 100);
+      }, 80);
+    };
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (!isInputField(e.target as Element)) {
+        setTimeout(() => {
+          if (!isInputField(document.activeElement)) {
+            setIsSyncPaused(false);
+          }
+        }, 50);
+      }
     };
 
     document.addEventListener('focusin', handleFocusIn);
     document.addEventListener('focusout', handleFocusOut);
+    document.addEventListener('pointerdown', handleClickOutside);
 
     return () => {
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, [isAdminOpen, setIsSyncPaused]);
 
@@ -397,49 +408,39 @@ export const AdminDashboardModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Google Sheets Sync Status Indicator & Toggle */}
+            {/* Google Sheets Sync Status Icon Indicator */}
             <button
               type="button"
               onClick={() => {
                 const nextPaused = !isSyncPaused;
                 setIsSyncPaused(nextPaused);
                 if (nextPaused) {
-                  showToast('⏸️ Sinkronisasi G-Sheets dijeda manual (aman untuk edit data)', 'info');
+                  showToast('⏸️ Sinkronisasi G-Sheets dijeda manual', 'info');
                 } else {
                   showToast('🟢 Sinkronisasi G-Sheets aktif kembali', 'success');
                 }
               }}
               title={
-                isSyncPaused || isDirty
-                  ? 'Sinkronisasi G-Sheets sedang DIJEDA (Aman untuk edit). Klik untuk aktifkan kembali.'
-                  : 'Sinkronisasi G-Sheets AKTIF. Klik untuk menjeda saat edit.'
+                isSyncPaused
+                  ? 'Sinkronisasi G-Sheets: DIJEDA (Kursor dalam kolom input / Klik untuk mengaktifkan)'
+                  : 'Sinkronisasi G-Sheets: AKTIF & REAL-TIME (Klik untuk menjeda)'
               }
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                isSyncPaused || isDirty
-                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100'
-                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100'
+              aria-label={isSyncPaused ? 'Sinkronisasi G-Sheets Dijeda' : 'Sinkronisasi G-Sheets Aktif'}
+              className={`p-2 rounded-xl border transition-all flex items-center justify-center shadow-xs ${
+                isSyncPaused
+                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
               }`}
             >
-              <span className="relative flex h-2 w-2">
-                {!isSyncPaused && !isDirty && (
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                )}
-                <span
-                  className={`relative inline-flex rounded-full h-2 w-2 ${
-                    isSyncPaused || isDirty ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`}
-                ></span>
-              </span>
-              {isSyncPaused || isDirty ? (
-                <>
-                  <Pause className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>G-Sheets: Dijeda</span>
-                </>
+              {isSyncPaused ? (
+                <div className="relative flex items-center justify-center">
+                  <Pause className="w-4 h-4" />
+                </div>
               ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>G-Sheets: ON</span>
-                </>
+                <div className="relative flex items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75 -top-1 -right-1"></span>
+                  <Play className="w-4 h-4" />
+                </div>
               )}
             </button>
 
