@@ -104,7 +104,9 @@ interface AppContextType {
   submitReview: (review: Omit<Testimonial, 'id' | 'date' | 'avatarBgColor' | 'verified'>) => Promise<boolean>;
   submitOrder: (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
   resetToDefaults: () => Promise<boolean>;
-  refreshData: (silent?: boolean) => Promise<void>;
+  refreshData: (silent?: boolean, force?: boolean) => Promise<void>;
+  isSyncPaused: boolean;
+  setIsSyncPaused: (paused: boolean) => void;
   notificationToast: { message: string; type: 'info' | 'success' | 'warning' } | null;
   showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error' | 'SUCCESS' | 'INFO' | 'WARNING' | 'ERROR') => void;
   dismissToast: () => void;
@@ -139,6 +141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isOrderModalOpen, setIsOrderModalOpen] = useState<boolean>(false);
   const [selectedPackageForOrder, setSelectedPackageForOrder] = useState<SubscriptionPackage | null>(null);
   const [notificationToast, setNotificationToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
+  const [isSyncPaused, setIsSyncPaused] = useState<boolean>(false);
 
   // Dark mode state with localStorage persistence
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -187,11 +190,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dataRef = useRef<AppData>(data);
   dataRef.current = data;
 
+  const isSyncPausedRef = useRef<boolean>(false);
+  isSyncPausedRef.current = isSyncPaused;
+
+  const isAdminOpenRef = useRef<boolean>(false);
+  isAdminOpenRef.current = isAdminOpen;
+
   const lastSyncTimestampRef = useRef<string>('');
   const isSyncingRef = useRef<boolean>(false);
 
-  // Silent background fetcher from Google Spreadsheet or Server
-  const syncLatestData = useCallback(async (silent = true) => {
+  // Background fetcher from Google Spreadsheet or Server
+  // Supports silent background updates, or forced manual syncs
+  const syncLatestData = useCallback(async (silent = true, force = false) => {
+    // If background sync is paused and not forced, do nothing
+    if (silent && isSyncPausedRef.current && !force) {
+      return;
+    }
+
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
 
@@ -494,22 +509,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 3. Auto sync when user returns / focuses the browser tab
     const handleFocus = () => {
-      syncLatestDataRef.current(true);
+      if (!isSyncPausedRef.current && !isAdminOpenRef.current) {
+        syncLatestDataRef.current(true);
+      }
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isAdminOpenRef.current) {
         syncLatestDataRef.current(true);
       }
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 4. Background polling timer (Every 10 seconds) to fetch spreadsheet updates across all users
+    // 4. Background polling timer (Every 15 seconds) to fetch spreadsheet updates across all users
     const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isAdminOpenRef.current) {
         syncLatestDataRef.current(true);
       }
-    }, 10000);
+    }, 15000);
 
     return () => {
       clearTimeout(timer);
@@ -808,6 +825,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitOrder,
         resetToDefaults,
         refreshData: syncLatestData,
+        isSyncPaused,
+        setIsSyncPaused,
         notificationToast,
         showToast,
         dismissToast,

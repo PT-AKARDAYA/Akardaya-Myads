@@ -42,6 +42,8 @@ import {
   RefreshCw,
   Sliders,
   Edit3,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -56,6 +58,8 @@ export const AdminApp: React.FC = () => {
     toggleDarkMode,
     showToast,
     refreshData,
+    isSyncPaused,
+    setIsSyncPaused,
   } = useApp();
 
   // Local editable draft
@@ -66,6 +70,18 @@ export const AdminApp: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'UNREAD' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
+
+  // Check if draft has unsaved changes
+  const isDirty = React.useMemo(() => {
+    return JSON.stringify(draftData) !== JSON.stringify(data);
+  }, [draftData, data]);
+
+  // Automatically pause background sync whenever admin is actively editing or adding data
+  useEffect(() => {
+    if (isDirty && !isSyncPaused) {
+      setIsSyncPaused(true);
+    }
+  }, [isDirty, isSyncPaused, setIsSyncPaused]);
 
   // Read orders tracking for badge count
   const [readOrderIds, setReadOrderIds] = useState<string[]>(() => {
@@ -106,13 +122,21 @@ export const AdminApp: React.FC = () => {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // Sync draft when server data updates
+  // Sync draft when server data updates ONLY IF NOT DIRTY and NOT PAUSED
   useEffect(() => {
+    if (isDirty || isSyncPaused) {
+      // Do not overwrite user's editing draft!
+      // Only safely merge incoming orders so unread badge stays updated
+      if (data.orders && JSON.stringify(draftData.orders) !== JSON.stringify(data.orders)) {
+        setDraftData((prev) => ({ ...prev, orders: data.orders }));
+      }
+      return;
+    }
     setDraftData((prev) => {
       if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
       return JSON.parse(JSON.stringify(data));
     });
-  }, [data]);
+  }, [data, isDirty, isSyncPaused]);
 
   // Faster background lead poller (every 5s) when activeTab is LEADS
   const refreshDataRef = useRef(refreshData);
@@ -300,6 +324,7 @@ export const AdminApp: React.FC = () => {
     const success = await updateAppData(draftData);
     setIsSaving(false);
     if (success) {
+      setIsSyncPaused(false);
       showToast('Perubahan berhasil disimpan & disiarkan real-time!', 'SUCCESS');
     }
   };
@@ -311,6 +336,7 @@ export const AdminApp: React.FC = () => {
       const success = await resetToDefaults();
       setIsSaving(false);
       if (success) {
+        setIsSyncPaused(false);
         showToast('Data berhasil dikembalikan ke format default lampiran!', 'SUCCESS');
       }
     }
@@ -516,6 +542,38 @@ export const AdminApp: React.FC = () => {
               <Download className="w-4 h-4" />
             </button>
 
+            {/* Sync Pause Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextPaused = !isSyncPaused;
+                setIsSyncPaused(nextPaused);
+                if (nextPaused) {
+                  showToast('⏸️ Sinkronisasi otomatis dijeda (aman untuk edit/tambah menu)', 'INFO');
+                } else {
+                  showToast('🟢 Sinkronisasi otomatis aktif kembali', 'SUCCESS');
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                isSyncPaused || isDirty
+                  ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-xs'
+                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+              }`}
+              title="Klik untuk menjeda/melanjutkan sinkronisasi otomatis"
+            >
+              {isSyncPaused || isDirty ? (
+                <>
+                  <Pause className="w-3.5 h-3.5" />
+                  <span>Sinkron Dijeda (Aman Edit)</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Sinkron Otomatis Aktif</span>
+                </>
+              )}
+            </button>
+
             {/* Dark Mode Toggle */}
             <button
               onClick={toggleDarkMode}
@@ -546,6 +604,33 @@ export const AdminApp: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Sync Status / Edit Protection Notice Banner */}
+      {(isDirty || isSyncPaused) && (
+        <div className="bg-amber-500/10 dark:bg-amber-950/50 border-b border-amber-500/20 px-4 sm:px-6 py-2.5 animate-in fade-in">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold shrink-0">
+                <Pause className="w-4 h-4" />
+              </span>
+              <span>
+                <strong>{isDirty ? 'Mode Edit / Tambah Aktif' : 'Sinkronisasi Otomatis Dijeda'}:</strong> Sinkronisasi background dijeda agar data yang sedang Anda edit/tambah tidak tertimpa atau berubah-ubah secara otomatis.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={isSaving}
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Admin Content Container */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col md:flex-row gap-6">

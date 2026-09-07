@@ -34,10 +34,26 @@ import {
   BarChart3,
   RefreshCw,
   Sliders,
+  Pause,
+  Play,
+  AlertTriangle,
+  Check,
 } from 'lucide-react';
 
 export const AdminDashboardModal: React.FC = () => {
-  const { data, isAdminOpen, setIsAdminOpen, updateAppData, resetToDefaults, isConnected, activeUsers, refreshData, showToast } = useApp();
+  const {
+    data,
+    isAdminOpen,
+    setIsAdminOpen,
+    updateAppData,
+    resetToDefaults,
+    isConnected,
+    activeUsers,
+    refreshData,
+    showToast,
+    isSyncPaused,
+    setIsSyncPaused,
+  } = useApp();
   
   // Local editable draft of AppData
   const [draftData, setDraftData] = useState<AppData>(data);
@@ -47,15 +63,42 @@ export const AdminDashboardModal: React.FC = () => {
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
 
-  // Sync draft data when modal opens or server data updates
+  // Check if draft has unsaved changes
+  const isDirty = React.useMemo(() => {
+    return JSON.stringify(draftData) !== JSON.stringify(data);
+  }, [draftData, data]);
+
+  // Automatically pause background sync whenever admin is actively editing or adding data
+  useEffect(() => {
+    if (isDirty && !isSyncPaused) {
+      setIsSyncPaused(true);
+    }
+  }, [isDirty, isSyncPaused, setIsSyncPaused]);
+
+  // Load initial data when modal opens
+  useEffect(() => {
+    if (isAdminOpen) {
+      setDraftData(JSON.parse(JSON.stringify(data)));
+    }
+  }, [isAdminOpen]);
+
+  // Sync draft data when server data updates ONLY IF NOT DIRTY and NOT PAUSED
   React.useEffect(() => {
     if (isAdminOpen) {
+      if (isDirty || isSyncPaused) {
+        // Do NOT overwrite user's editing draft!
+        // Only update incoming orders safely so Leads tab gets new orders without resetting forms
+        if (data.orders && JSON.stringify(draftData.orders) !== JSON.stringify(data.orders)) {
+          setDraftData((prev) => ({ ...prev, orders: data.orders }));
+        }
+        return;
+      }
       setDraftData((prev) => {
         if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
         return JSON.parse(JSON.stringify(data));
       });
     }
-  }, [isAdminOpen, data]);
+  }, [isAdminOpen, data, isDirty, isSyncPaused]);
 
   // Real-time polling when modal is on Leads tab
   const refreshDataRef = useRef(refreshData);
@@ -245,8 +288,20 @@ export const AdminDashboardModal: React.FC = () => {
     const success = await updateAppData(draftData);
     setIsSaving(false);
     if (success) {
+      setIsSyncPaused(false);
       setIsAdminOpen(false);
     }
+  };
+
+  // Close modal with unsaved check
+  const handleCloseModal = () => {
+    if (isDirty) {
+      if (!window.confirm('Ada perubahan yang belum disimpan. Yakin ingin menutup dashboard?')) {
+        return;
+      }
+    }
+    setIsSyncPaused(false);
+    setIsAdminOpen(false);
   };
 
   // Reset to original default configuration
@@ -255,6 +310,7 @@ export const AdminDashboardModal: React.FC = () => {
       setIsSaving(true);
       await resetToDefaults();
       setIsSaving(false);
+      setIsSyncPaused(false);
       setIsAdminOpen(false);
     }
   };
@@ -266,13 +322,13 @@ export const AdminDashboardModal: React.FC = () => {
     >
       <div className="w-full max-w-5xl h-[92vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95">
         {/* Modal Top Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                   Dashboard Pengaturan Admin
                 </h2>
@@ -287,7 +343,7 @@ export const AdminDashboardModal: React.FC = () => {
                       }`}
                     ></span>
                   </span>
-                  <span>{isConnected ? 'Server Sinkronisasi Aktif' : 'Menghubungkan...'}</span>
+                  <span>{isConnected ? 'Server Aktif' : 'Menghubungkan...'}</span>
                   <span className="text-emerald-400 dark:text-emerald-600">|</span>
                   <span>{activeUsers} Pengunjung Website</span>
                 </div>
@@ -299,6 +355,38 @@ export const AdminDashboardModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Sync Pause Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextPaused = !isSyncPaused;
+                setIsSyncPaused(nextPaused);
+                if (nextPaused) {
+                  showToast('⏸️ Sinkronisasi otomatis dijeda (aman untuk edit & tambah menu)', 'info');
+                } else {
+                  showToast('🟢 Sinkronisasi otomatis aktif kembali', 'success');
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                isSyncPaused || isDirty
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs hover:bg-amber-600'
+                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+              }`}
+              title="Klik untuk menjeda atau mengaktifkan sinkronisasi otomatis"
+            >
+              {isSyncPaused || isDirty ? (
+                <>
+                  <Pause className="w-3.5 h-3.5" />
+                  <span>Sinkron Dijeda (Aman Edit)</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Sinkron Otomatis Aktif</span>
+                </>
+              )}
+            </button>
+
             <a
               href="/admin.html"
               title="Buka di Halaman Penuh Terpisah (admin.html)"
@@ -309,7 +397,7 @@ export const AdminDashboardModal: React.FC = () => {
             </a>
             <button
               id="btn-admin-close"
-              onClick={() => setIsAdminOpen(false)}
+              onClick={handleCloseModal}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
@@ -423,6 +511,31 @@ export const AdminDashboardModal: React.FC = () => {
             )}
           </button>
         </div>
+
+        {/* Sync Status / Edit Protection Notice Banner */}
+        {(isDirty || isSyncPaused) && (
+          <div className="bg-amber-500/10 dark:bg-amber-950/40 border-b border-amber-500/20 px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold shrink-0">
+                <Pause className="w-3.5 h-3.5" />
+              </span>
+              <span>
+                <strong>{isDirty ? 'Mode Edit / Tambah Aktif' : 'Sinkronisasi Otomatis Dijeda'}:</strong> Sinkronisasi latar belakang dijeda agar data yang sedang Anda ketik/tambah tidak tertimpa atau berubah-ubah.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={isSaving}
+                className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'Menyimpan...' : 'Simpan Sekarang'}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tab Content Body (Scrollable) */}
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/60">
