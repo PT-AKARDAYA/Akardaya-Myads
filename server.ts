@@ -255,32 +255,6 @@ async function startServer() {
         serverVisitorLogs.pop();
       }
 
-      // Forward to Google Apps Script as dual-redundancy background sync
-      const gasUrl = appData?.companyConfig?.spreadsheetUrl;
-      if (gasUrl && gasUrl.startsWith('https://script.google.com/')) {
-        fetch(gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'track_visitor',
-            visitorId: log.visitorId,
-            timestamp: log.timestamp,
-            page: log.page,
-            device: log.device,
-            browser: log.browser,
-            isp: log.isp || '',
-            city: log.city || '',
-            region: log.region || '',
-            location: log.city ? `${log.city}, ${log.region || 'ID'}` : '',
-            referrer: log.referrer,
-            eventType: log.eventType,
-            screen: body.screen || 'Unknown',
-          }),
-        }).catch((err) => {
-          console.warn('Server GAS forward err:', err?.message);
-        });
-      }
-
       res.json({ status: 'success', totalLogged: serverVisitorLogs.length, activeClients: clients.size });
     } catch (e: any) {
       res.status(500).json({ status: 'error', message: e.message });

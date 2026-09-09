@@ -130,7 +130,7 @@ export function getJakartaTimestamp(): string {
   }
 }
 
-const STORAGE_KEY = 'akardaya_visitor_logs';
+export const STORAGE_KEY = 'akardaya_visitor_logs';
 const VISITOR_ID_KEY = 'akardaya_unique_visitor_id';
 
 function getOrCreateVisitorId(): string {
@@ -249,6 +249,9 @@ export function initializeThirdPartyTrackers(gaId?: string, pixelId?: string) {
   }
 }
 
+let memoryLastTrackTime = 0;
+let memoryLastTrackPage = '';
+
 /**
  * Tracks a real visitor event and logs to localStorage, server backend, and GA4 / FB Pixel
  */
@@ -270,11 +273,17 @@ export function trackRealVisitor(
 
     // Rate limit: If visiting a DIFFERENT page/section, allow immediately!
     // If it's the exact same page, throttle to 3 seconds
+    const now = Date.now();
+    if (memoryLastTrackPage === cleanPage && now - memoryLastTrackTime < 3000) {
+      if (eventType === 'pageview') return;
+    }
+    memoryLastTrackTime = now;
+    memoryLastTrackPage = cleanPage;
+
     const lastTrackKey = 'akardaya_last_track_time';
     const lastPageKey = 'akardaya_last_track_page';
     const lastTrack = localStorage.getItem(lastTrackKey);
     const lastPage = localStorage.getItem(lastPageKey);
-    const now = Date.now();
     
     if (lastPage === cleanPage && lastTrack && now - parseInt(lastTrack, 10) < 3000) {
       if (eventType === 'pageview') return;
@@ -517,7 +526,7 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
   if (totalViews === 0 && logs.length > 0) totalViews = logs.length;
 
   const uniqueVisitorIds = new Set(logs.map((l) => l.visitorId || 'unknown'));
-  const uniqueVisitors = Math.max(1, uniqueVisitorIds.size);
+  const uniqueVisitors = uniqueVisitorIds.size;
 
   // Device breakdown calculation
   let mobileCount = 0;
@@ -546,30 +555,31 @@ export function calculateAnalyticsSummaryFromLogs(logs: VisitorRecord[]): LocalA
     tabletCount,
   };
 
-  // Top Pages
-  const pageMap: Record<string, number> = {};
-  logs.forEach((l) => {
+  // Top Pages (Berdasarkan Pengunjung Unik)
+  const pageVisitorMap: Record<string, Set<string>> = {};
+  logs.forEach((l, idx) => {
     const rawPage = l.page || '/';
-    const hits = Math.max(l.hits || 1, 1);
+    const vid = l.visitorId && l.visitorId.trim() ? l.visitorId.trim() : (l.id || `anon-${idx}`);
     if (rawPage.includes(',')) {
       const parts = rawPage.split(',').map((s) => s.trim()).filter(Boolean);
-      const weightPerPart = Math.max(1, Math.round(hits / (parts.length || 1)));
       parts.forEach((p) => {
-        pageMap[p] = (pageMap[p] || 0) + weightPerPart;
+        if (!pageVisitorMap[p]) pageVisitorMap[p] = new Set();
+        pageVisitorMap[p].add(vid);
       });
     } else {
-      pageMap[rawPage] = (pageMap[rawPage] || 0) + hits;
+      if (!pageVisitorMap[rawPage]) pageVisitorMap[rawPage] = new Set();
+      pageVisitorMap[rawPage].add(vid);
     }
   });
-  const topPages = Object.entries(pageMap)
-    .map(([page, count]) => ({ page, count }))
+  const topPages = Object.entries(pageVisitorMap)
+    .map(([page, visitorsSet]) => ({ page, count: visitorsSet.size }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
 
   // Top Browsers
   const browserMap: Record<string, number> = {};
   logs.forEach((l) => {
-    const b = l.browser || 'Google Chrome';
+    const b = l.browser || 'Unknown';
     const hits = Math.max(l.hits || 1, 1);
     browserMap[b] = (browserMap[b] || 0) + hits;
   });

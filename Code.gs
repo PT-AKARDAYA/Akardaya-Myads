@@ -144,7 +144,8 @@ function setupSheets() {
     const s = ss.getSheetByName("Analytics_Logs");
     if (s.getLastRow() >= 1) {
       const headerValues = s.getRange(1, 1, 1, Math.max(s.getLastColumn(), ANALYTICS_HEADERS.length)).getDisplayValues()[0];
-      if (!headerValues[6] || headerValues[6].toString().toLowerCase().indexOf("isp") === -1) {
+      const headerStr = headerValues.join(" ").toLowerCase();
+      if (headerStr.indexOf("isp") === -1 || headerStr.indexOf("kota") === -1) {
         s.getRange(1, 1, 1, ANALYTICS_HEADERS.length).setValues([ANALYTICS_HEADERS]);
         formatHeader(s, "#0F766E");
       }
@@ -208,6 +209,11 @@ function doGet(e) {
       const p = e && e.parameter ? e.parameter : {};
       const trackResult = recordVisitorLogConsolidated(ss, p);
       return ContentService.createTextOutput(JSON.stringify(trackResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "DEDUPLICATE_ANALYTICS" || action === "CLEAN_DUPLICATES") {
+      const dedupResult = deduplicateAnalyticsSheet(ss);
+      return ContentService.createTextOutput(JSON.stringify(dedupResult)).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -310,6 +316,24 @@ function doPost(e) {
     if (action === "track_visitor") {
       const trackResult = recordVisitorLogConsolidated(ss, requestBody);
       return ContentService.createTextOutput(JSON.stringify(trackResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 5. Bersihkan Log Analitik Pengunjung
+    if (action === "CLEAR_ANALYTICS") {
+      const sheet = ss.getSheetByName("Analytics_Logs");
+      if (sheet && sheet.getLastRow() > 1) {
+        sheet.deleteRows(2, sheet.getLastRow() - 1);
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Seluruh data log pengunjung di sheet Analytics_Logs berhasil dibersihkan"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 6. Gabungkan / Bersihkan Baris Duplikat (Hemat Baris)
+    if (action === "DEDUPLICATE_ANALYTICS" || action === "CLEAN_DUPLICATES") {
+      const dedupResult = deduplicateAnalyticsSheet(ss);
+      return ContentService.createTextOutput(JSON.stringify(dedupResult)).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -478,95 +502,118 @@ function readAnalyticsSheet(ss) {
 
   const lastRow = sheet.getLastRow();
   const numRows = Math.min(lastRow - 1, 1000);
-  const startRow = lastRow - numRows + 1;
-  const lastCol = Math.max(sheet.getLastColumn(), 11);
+  const startRow = 2;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
   const rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
 
-  // Deteksi kolom header apakah sudah versi 11 kolom (termasuk ISP & Lokasi)
-  const headerValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
-  const is11ColFormat = headerValues[6] && (headerValues[6].toString().toLowerCase().indexOf("isp") !== -1 || headerValues[6].toString().toLowerCase().indexOf("provider") !== -1);
+  // Helper pencari indeks kolom dinamis berdasarkan kata kunci header
+  function findCol(keywords, defaultIdx) {
+    for (let i = 0; i < headers.length; i++) {
+      const h = String(headers[i] || "").toLowerCase();
+      for (let k = 0; k < keywords.length; k++) {
+        if (h.indexOf(keywords[k]) !== -1) return i;
+      }
+    }
+    return defaultIdx;
+  }
+
+  const colDateIdx = findCol(["tanggal", "date"], 0);
+  const colVisitorIdx = findCol(["visitor", "id pengunjung", "id"], 1);
+  const colHitsIdx = findCol(["hits", "total", "frekuensi"], 2);
+  const colPageIdx = findCol(["halaman", "page"], 3);
+  const colDeviceIdx = findCol(["perangkat", "device"], 4);
+  const colBrowserIdx = findCol(["browser"], 5);
+  const colIspIdx = findCol(["isp", "provider"], 6);
+  const colLocIdx = findCol(["kota", "lokasi", "city", "wilayah"], 7);
+  const colRefIdx = findCol(["sumber", "referrer"], 8);
+  const colFirstTimeIdx = findCol(["pertama", "first"], 9);
+  const colLastTimeIdx = findCol(["terakhir", "last"], 10);
 
   return rows.map(r => {
-    const col0 = String(r[0] || "");
-    const col1 = String(r[1] || "");
-    const col2 = r[2];
-    const isNumericHits = typeof col2 === "number" || (!isNaN(Number(col2)) && String(col2).trim() !== "" && !String(col2).includes("/"));
-    
-    if (isNumericHits) {
-      const hits = Math.max(Number(col2) || 1, 1);
-      const pages = String(r[3] || "/");
-      const device = String(r[4] || "Unknown");
-      const browser = String(r[5] || "Unknown");
-      
-      let isp = "-";
-      let city = "Indonesia";
-      let region = "WIB";
-      let referrer = "Direct";
-      let firstTime = "";
-      let lastTime = "";
-
-      if (is11ColFormat || lastCol >= 11) {
-        isp = String(r[6] || "-").trim();
-        const locStr = String(r[7] || "Indonesia").trim();
-        if (locStr && locStr !== "-") {
-          if (locStr.includes(",")) {
-            const parts = locStr.split(",");
-            city = parts[0].trim();
-            region = parts.slice(1).join(",").trim();
-          } else {
-            city = locStr;
-          }
-        }
-        referrer = String(r[8] || "Direct");
-        firstTime = String(r[9] || "");
-        lastTime = String(r[10] || "");
-      } else {
-        referrer = String(r[6] || "Direct");
-        firstTime = String(r[7] || "");
-        lastTime = String(r[8] || "");
+    const rawDate = r[colDateIdx];
+    let dateStr = "";
+    if (rawDate instanceof Date) {
+      try {
+        dateStr = Utilities.formatDate(rawDate, "Asia/Jakarta", "yyyy-MM-dd");
+      } catch(e) {
+        dateStr = String(rawDate || "").trim();
       }
-
-      const fullTimestamp = col0 + (lastTime ? " " + lastTime : "");
-
-      return {
-        timestamp: fullTimestamp,
-        date: col0,
-        visitorId: col1,
-        hits: hits,
-        page: pages,
-        device: device,
-        browser: browser,
-        isp: isp,
-        city: city,
-        region: region,
-        referrer: referrer,
-        eventType: "pageview",
-        firstTime: firstTime,
-        lastTime: lastTime
-      };
     } else {
-      // Format legacy 8 kolom
-      return {
-        timestamp: col0,
-        visitorId: col1,
-        hits: 1,
-        page: String(r[2] || "/"),
-        device: String(r[3] || "Unknown"),
-        browser: String(r[4] || "Unknown"),
-        isp: "-",
-        city: "Indonesia",
-        region: "WIB",
-        referrer: String(r[5] || "Direct"),
-        eventType: String(r[6] || "pageview"),
-        screen: String(r[7] || "")
-      };
+      dateStr = String(rawDate || "").trim();
     }
+
+    const visitorId = String(r[colVisitorIdx] || "").trim();
+    const rawHits = r[colHitsIdx];
+    const isNumericHits = typeof rawHits === "number" || (!isNaN(Number(rawHits)) && String(rawHits).trim() !== "" && !String(rawHits).includes("/"));
+    const hits = isNumericHits ? Math.max(Number(rawHits) || 1, 1) : 1;
+
+    const pages = String(r[colPageIdx] || "/").trim();
+    const device = String(r[colDeviceIdx] || "Unknown").trim();
+    const browser = String(r[colBrowserIdx] || "Unknown").trim();
+    
+    // ISP Provider Murni Tanpa Dummy
+    let isp = "-";
+    if (colIspIdx !== -1 && r[colIspIdx]) {
+      const rawIsp = String(r[colIspIdx]).trim();
+      if (rawIsp && rawIsp !== "-" && rawIsp.toLowerCase() !== "undefined") {
+        isp = rawIsp;
+      }
+    }
+
+    // Kota / Lokasi Murni Tanpa Dummy
+    let city = "-";
+    let region = "";
+    if (colLocIdx !== -1 && r[colLocIdx]) {
+      const rawLoc = String(r[colLocIdx]).trim();
+      if (rawLoc && rawLoc !== "-" && rawLoc.toLowerCase() !== "undefined") {
+        if (rawLoc.includes(",")) {
+          const parts = rawLoc.split(",");
+          city = parts[0].trim();
+          region = parts.slice(1).join(",").trim();
+        } else {
+          city = rawLoc;
+        }
+      }
+    }
+
+    // Referrer
+    let referrer = "Akses Langsung";
+    if (colRefIdx !== -1 && r[colRefIdx]) {
+      const rawRef = String(r[colRefIdx]).trim();
+      if (rawRef && rawRef !== "-" && rawRef.toLowerCase() !== "direct" && rawRef.toLowerCase() !== "langsung") {
+        referrer = rawRef;
+      }
+    }
+
+    const firstTime = colFirstTimeIdx !== -1 && r[colFirstTimeIdx] ? String(r[colFirstTimeIdx]).trim() : "";
+    const lastTime = colLastTimeIdx !== -1 && r[colLastTimeIdx] ? String(r[colLastTimeIdx]).trim() : "";
+    const fullTimestamp = dateStr + (lastTime ? " " + lastTime : (firstTime ? " " + firstTime : ""));
+
+    return {
+      timestamp: fullTimestamp || dateStr,
+      date: dateStr,
+      visitorId: visitorId,
+      hits: hits,
+      page: pages,
+      device: device,
+      browser: browser,
+      isp: isp,
+      city: city,
+      region: region,
+      referrer: referrer,
+      eventType: "pageview",
+      firstTime: firstTime,
+      lastTime: lastTime
+    };
   }).reverse();
 }
 
 /**
- * Fungsi Pintar: Menghemat Baris Spreadsheet dengan Menggabungkan Kunjungan Visitor ID di Hari yang Sama
- * Termasuk pencatatan ISP Provider & Kota/Provinsi Lokasi
+ * Fungsi Pintar: Menghemat Baris Spreadsheet dengan Menggabungkan Kunjungan Visitor ID / Device di Hari yang Sama.
+ * Jika ditemukan baris duplikat dengan tanggal & visitor/device yang sama, baris akan digabungkan secara otomatis (Auto-Deduplicate).
  */
 function recordVisitorLogConsolidated(ss, p) {
   const analyticsSheetName = "Analytics_Logs";
@@ -592,21 +639,25 @@ function recordVisitorLogConsolidated(ss, p) {
     sheet.setFrozenRows(1);
     formatHeader(sheet, "#0F766E"); // Teal header
   } else {
-    // Periksa apakah header masih versi lama (misal 9 kolom lama)
+    // Periksa apakah header masih versi lama (misal belum ada ISP & Kota)
     const firstRowValues = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), modernHeaders.length)).getDisplayValues()[0];
-    if (!firstRowValues[6] || firstRowValues[6].toLowerCase().indexOf("isp") === -1) {
+    const headerStr = firstRowValues.join(" ").toLowerCase();
+    if (headerStr.indexOf("isp") === -1 || headerStr.indexOf("kota") === -1) {
       sheet.getRange(1, 1, 1, modernHeaders.length).setValues([modernHeaders]);
       formatHeader(sheet, "#0F766E");
     }
   }
 
-  // Gunakan LockService agar request simultan tidak bentrok membuat baris ganda
+  // Gunakan LockService dengan waitLock agar request simultan mengantri dengan aman
   const lock = LockService.getScriptLock();
   let hasLock = false;
   try {
-    hasLock = lock.tryLock(10000);
+    lock.waitLock(30000);
+    hasLock = true;
   } catch (e) {
-    // Lanjutkan jika lock tidak tersedia
+    try {
+      hasLock = lock.tryLock(10000);
+    } catch (e2) {}
   }
 
   try {
@@ -624,21 +675,25 @@ function recordVisitorLogConsolidated(ss, p) {
     const timeNowStr = Utilities.formatDate(now, "Asia/Jakarta", "HH:mm:ss") + " WIB";
 
     const lastRow = sheet.getLastRow();
-    let foundRowIndex = -1;
-    let existingHits = 1;
-    let existingPages = "";
-    let existingIsp = "";
-    let existingLoc = "";
+    
+    // Cari SEMUA baris yang cocok pada hari yang sama
+    const matchingRowIndices = [];
+    let masterRowIndex = -1;
+    let combinedHits = 0;
+    const combinedPagesSet = {};
+    let earliestFirstTime = "";
+    let existingIsp = isp;
+    let existingLoc = location;
 
     if (lastRow > 1) {
-      // Ambil data display values dan raw values
-      const checkRows = Math.min(lastRow - 1, 500);
+      const checkRows = Math.min(lastRow - 1, 1000);
       const startRow = lastRow - checkRows + 1;
       const maxCol = Math.max(sheet.getLastColumn(), 11);
       const displayRange = sheet.getRange(startRow, 1, checkRows, maxCol).getDisplayValues();
       const rawRange = sheet.getRange(startRow, 1, checkRows, maxCol).getValues();
 
-      for (let i = displayRange.length - 1; i >= 0; i--) {
+      // Scan seluruh baris dalam rentang pemeriksaan
+      for (let i = 0; i < displayRange.length; i++) {
         const rowDisplay = displayRange[i];
         const rowRaw = rawRange[i];
 
@@ -654,51 +709,90 @@ function recordVisitorLogConsolidated(ss, p) {
         }
 
         const rowVisitorId = String(rowDisplay[1] || rowRaw[1] || "").trim();
+        const rowDevice = String(rowDisplay[4] || rowRaw[4] || "").trim();
+        const rowBrowser = String(rowDisplay[5] || rowRaw[5] || "").trim();
 
         const isDateMatch = rowDateStr === todayDateStr || rowDateStr.indexOf(todayDateStr) !== -1;
-        const isVisitorMatch = rowVisitorId === visitorId && visitorId !== "unknown";
+        
+        // Pencocokan: Berdasarkan Visitor ID yang sama ATAU Perangkat & Browser yang sama di hari yang sama
+        const isVisitorMatch = visitorId !== "unknown" && rowVisitorId === visitorId;
+        const isDeviceMatch = isDateMatch && device !== "Unknown" && rowDevice === device && (browser === "Unknown" || rowBrowser === browser || !rowBrowser);
 
-        if (isDateMatch && isVisitorMatch) {
-          foundRowIndex = startRow + i; // Baris di sheet (1-indexed)
-          const col2Val = rowRaw[2];
-          existingHits = Number(col2Val) || Number(rowDisplay[2]) || 1;
-          existingPages = String(rowDisplay[3] || rowRaw[3] || "");
-          existingIsp = String(rowDisplay[6] || rowRaw[6] || "");
-          existingLoc = String(rowDisplay[7] || rowRaw[7] || "");
-          break;
+        if (isDateMatch && (isVisitorMatch || isDeviceMatch)) {
+          const actualRowIndex = startRow + i;
+          matchingRowIndices.push(actualRowIndex);
+
+          const rowHits = Number(rowRaw[2]) || Number(rowDisplay[2]) || 1;
+          combinedHits += rowHits;
+
+          // Kumpulkan halaman unik
+          const rowPages = String(rowDisplay[3] || rowRaw[3] || "");
+          if (rowPages) {
+            rowPages.split(",").forEach(function(s) {
+              const cleanP = s.trim();
+              if (cleanP) combinedPagesSet[cleanP] = true;
+            });
+          }
+
+          // Catat waktu pertama terawal
+          const rowFirstTime = String(rowDisplay[9] || rowRaw[9] || "").trim();
+          if (rowFirstTime && (!earliestFirstTime || rowFirstTime < earliestFirstTime)) {
+            earliestFirstTime = rowFirstTime;
+          }
+
+          // Simpan info ISP & Lokasi jika baris sebelumnya sudah ada
+          const rowIsp = String(rowDisplay[6] || rowRaw[6] || "").trim();
+          if (rowIsp && rowIsp !== "-") existingIsp = rowIsp;
+
+          const rowLoc = String(rowDisplay[7] || rowRaw[7] || "").trim();
+          if (rowLoc && rowLoc !== "-") existingLoc = rowLoc;
         }
       }
     }
 
-    if (foundRowIndex > 0) {
-      // PENGUNJUNG SAMA DI HARI YANG SAMA -> UPDATE BARIS (HEMAT BARIS!)
-      const newHits = existingHits + 1;
-      
-      // Gabungkan riwayat halaman unik yang dikunjungi
-      let pageList = existingPages ? existingPages.split(",").map(function(s) { return s.trim(); }).filter(Boolean) : [];
-      if (pageList.indexOf(page) === -1) {
-        pageList.push(page);
-      }
-      const updatedPages = pageList.join(", ");
+    // Tambahkan halaman kunjungan saat ini ke daftar halaman
+    if (page) {
+      combinedPagesSet[page] = true;
+    }
+    const allPagesArray = Object.keys(combinedPagesSet);
+    const updatedPagesStr = allPagesArray.length > 0 ? allPagesArray.join(", ") : page;
 
-      // Update kolom Total Hits (kolom 3), Halaman (kolom 4), Perangkat (kolom 5), Browser (kolom 6), ISP (kolom 7), Lokasi (kolom 8), Terakhir Aktif (kolom 11)
-      sheet.getRange(foundRowIndex, 3).setValue(newHits);
-      sheet.getRange(foundRowIndex, 4).setValue(updatedPages);
-      if (device && device !== "Unknown") sheet.getRange(foundRowIndex, 5).setValue(device);
-      if (browser && browser !== "Unknown") sheet.getRange(foundRowIndex, 6).setValue(browser);
-      if (isp && isp !== "-" && (!existingIsp || existingIsp === "-")) sheet.getRange(foundRowIndex, 7).setValue(isp);
-      if (location && location !== "-" && (!existingLoc || existingLoc === "-")) sheet.getRange(foundRowIndex, 8).setValue(location);
-      sheet.getRange(foundRowIndex, 11).setValue(timeNowStr);
+    if (matchingRowIndices.length > 0) {
+      // Baris pertama yang cocok dijadikan MASTER ROW (HEMAT BARIS!)
+      masterRowIndex = matchingRowIndices[0];
+      const newTotalHits = combinedHits + 1;
+      const finalFirstTime = earliestFirstTime || timeNowStr;
+
+      sheet.getRange(masterRowIndex, 3).setValue(newTotalHits);
+      sheet.getRange(masterRowIndex, 4).setValue(updatedPagesStr);
+      if (device && device !== "Unknown") sheet.getRange(masterRowIndex, 5).setValue(device);
+      if (browser && browser !== "Unknown") sheet.getRange(masterRowIndex, 6).setValue(browser);
+      if (existingIsp && existingIsp !== "-") sheet.getRange(masterRowIndex, 7).setValue(existingIsp);
+      if (existingLoc && existingLoc !== "-") sheet.getRange(masterRowIndex, 8).setValue(existingLoc);
+      if (finalFirstTime) sheet.getRange(masterRowIndex, 10).setValue(finalFirstTime);
+      sheet.getRange(masterRowIndex, 11).setValue(timeNowStr);
+
+      // JIKA ADA BARIS GANDA (DUPLICATE ROWS) SEPERTI PADA GAMBAR PENGGUNA:
+      // Hapus baris duplikat lainnya dari bawah ke atas agar menghemat baris di Google Sheets!
+      if (matchingRowIndices.length > 1) {
+        for (let d = matchingRowIndices.length - 1; d >= 1; d--) {
+          const dupRowIndex = matchingRowIndices[d];
+          sheet.deleteRow(dupRowIndex);
+        }
+      }
+
+      SpreadsheetApp.flush();
 
       return {
         status: "success",
-        message: "Visitor log consolidated (Baris " + foundRowIndex + ", Total Hits: " + newHits + ")",
+        message: "Visitor log consolidated (Baris " + masterRowIndex + ", Total Hits: " + newTotalHits + (matchingRowIndices.length > 1 ? ", " + (matchingRowIndices.length - 1) + " baris duplikat dibersihkan" : "") + ")",
         consolidated: true,
-        row: foundRowIndex,
-        hits: newHits
+        row: masterRowIndex,
+        hits: newTotalHits,
+        duplicatesRemoved: matchingRowIndices.length - 1
       };
     } else {
-      // PENGUNJUNG ATAU HARI BARU -> BUAT 1 BARIS BARU (11 Kolom Lengkap)
+      // PENGUNJUNG / DEVICE / HARI BARU -> BUAT 1 BARIS BARU (11 Kolom Lengkap)
       sheet.appendRow([
         todayDateStr,
         visitorId,
@@ -713,6 +807,8 @@ function recordVisitorLogConsolidated(ss, p) {
         timeNowStr
       ]);
 
+      SpreadsheetApp.flush();
+
       return {
         status: "success",
         message: "New daily visitor row created",
@@ -723,8 +819,123 @@ function recordVisitorLogConsolidated(ss, p) {
   } finally {
     if (hasLock) {
       try {
+        SpreadsheetApp.flush();
         lock.releaseLock();
       } catch (e) {}
+    }
+  }
+}
+
+/**
+ * Fungsi Pembersih Baris Duplikat Otomatis:
+ * Menelusuri seluruh sheet Analytics_Logs, menggabungkan baris yang memiliki Tanggal dan Visitor ID/Perangkat yang sama,
+ * dan menghapus baris duplikat yang berlebihan untuk menghemat baris spreadsheet.
+ */
+function deduplicateAnalyticsSheet(ss) {
+  const sheet = ss.getSheetByName("Analytics_Logs");
+  if (!sheet || sheet.getLastRow() <= 2) return { status: "success", mergedGroups: 0, rowsRemoved: 0 };
+
+  const lock = LockService.getScriptLock();
+  let hasLock = false;
+  try {
+    lock.waitLock(15000);
+    hasLock = true;
+  } catch(e) {}
+
+  try {
+    const lastRow = sheet.getLastRow();
+    const lastCol = Math.max(sheet.getLastColumn(), 11);
+    const displayValues = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+    const rawValues = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+    // Kelompokkan baris berdasarkan (Tanggal + VisitorId) atau (Tanggal + Device)
+    const groups = {};
+    for (let i = 0; i < displayValues.length; i++) {
+      const rowIndex = i + 2; // Baris asli di spreadsheet
+      const dateStr = String(displayValues[i][0] || "").substring(0, 10).trim();
+      const visitorId = String(displayValues[i][1] || "").trim();
+      const device = String(displayValues[i][4] || "").trim();
+
+      const key = dateStr && visitorId && visitorId !== "unknown" 
+        ? (dateStr + "_" + visitorId)
+        : (dateStr + "_" + device);
+
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push({
+        rowIndex: rowIndex,
+        display: displayValues[i],
+        raw: rawValues[i]
+      });
+    }
+
+    const rowsToDelete = [];
+    let mergedCount = 0;
+
+    for (const key in groups) {
+      const list = groups[key];
+      if (list.length > 1) {
+        // Baris master adalah baris pertama
+        const master = list[0];
+        let totalHits = 0;
+        const pagesSet = {};
+        let earliestFirst = "";
+        let latestLast = "";
+
+        for (let k = 0; k < list.length; k++) {
+          const item = list[k];
+          const hits = Number(item.raw[2]) || Number(item.display[2]) || 1;
+          totalHits += hits;
+
+          const p = String(item.display[3] || "");
+          if (p) {
+            p.split(",").forEach(function(s) {
+              const clean = s.trim();
+              if (clean) pagesSet[clean] = true;
+            });
+          }
+
+          const fTime = String(item.display[9] || "").trim();
+          if (fTime && (!earliestFirst || fTime < earliestFirst)) {
+            earliestFirst = fTime;
+          }
+
+          const lTime = String(item.display[10] || "").trim();
+          if (lTime && (!latestLast || lTime > latestLast)) {
+            latestLast = lTime;
+          }
+
+          if (k > 0) {
+            rowsToDelete.push(item.rowIndex);
+          }
+        }
+
+        const pagesArr = Object.keys(pagesSet);
+        sheet.getRange(master.rowIndex, 3).setValue(totalHits);
+        if (pagesArr.length > 0) {
+          sheet.getRange(master.rowIndex, 4).setValue(pagesArr.join(", "));
+        }
+        if (earliestFirst) sheet.getRange(master.rowIndex, 10).setValue(earliestFirst);
+        if (latestLast) sheet.getRange(master.rowIndex, 11).setValue(latestLast);
+        mergedCount++;
+      }
+    }
+
+    // Hapus baris duplikat dari urutan baris terbawah ke teratas
+    rowsToDelete.sort(function(a, b) { return b - a; });
+    for (let d = 0; d < rowsToDelete.length; d++) {
+      sheet.deleteRow(rowsToDelete[d]);
+    }
+
+    SpreadsheetApp.flush();
+    return { status: "success", mergedGroups: mergedCount, rowsRemoved: rowsToDelete.length };
+  } finally {
+    if (hasLock) {
+      try {
+        SpreadsheetApp.flush();
+        lock.releaseLock();
+      } catch(e) {}
     }
   }
 }
