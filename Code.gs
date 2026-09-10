@@ -454,20 +454,34 @@ function readAllSheets(ss) {
   const sOff = ss.getSheetByName(SHEET_OFFICES);
   if (sOff && sOff.getLastRow() > 1) {
     const rows = sOff.getRange(2, 1, sOff.getLastRow() - 1, sOff.getLastColumn()).getValues();
-    result.offices = rows.map(r => ({
-      id: String(r[0]),
-      name: String(r[1]),
-      type: String(r[2]) || "CABANG",
-      cityName: String(r[3]),
-      address: String(r[4]),
-      latitude: Number(r[5]) || 0,
-      longitude: Number(r[6]) || 0,
-      phone: r[7] ? String(r[7]) : undefined,
-      whatsapp: r[8] ? String(r[8]) : undefined,
-      operatingHours: r[9] ? String(r[9]) : undefined,
-      isPrimary: String(r[10]).toUpperCase() === "YA" || r[10] === true,
-      notes: r[11] ? String(r[11]) : undefined
-    }));
+    result.offices = rows.map((r, idx) => {
+      var lat = 0;
+      var lng = 0;
+      if (r[5] !== "" && r[5] !== null && r[5] !== undefined) {
+        lat = typeof r[5] === "number" ? r[5] : parseFloat(String(r[5]).replace(",", ".").trim());
+        if (isNaN(lat)) lat = 0;
+      }
+      if (r[6] !== "" && r[6] !== null && r[6] !== undefined) {
+        lng = typeof r[6] === "number" ? r[6] : parseFloat(String(r[6]).replace(",", ".").trim());
+        if (isNaN(lng)) lng = 0;
+      }
+      var typeStr = String(r[2] || "CABANG").trim().toUpperCase();
+      var normType = typeStr.indexOf("PUSAT") !== -1 ? "PUSAT" : "CABANG";
+      return {
+        id: String(r[0] || ("office_" + new Date().getTime() + "_" + idx)),
+        name: String(r[1] || "Kantor Cabang"),
+        type: normType,
+        cityName: String(r[3] || ""),
+        address: String(r[4] || ""),
+        latitude: lat,
+        longitude: lng,
+        phone: r[7] ? String(r[7]) : undefined,
+        whatsapp: r[8] ? String(r[8]) : undefined,
+        operatingHours: r[9] ? String(r[9]) : undefined,
+        isPrimary: String(r[10]).toUpperCase() === "YA" || r[10] === true,
+        notes: r[11] ? String(r[11]) : undefined
+      };
+    });
   }
 
   // 6. Baca Sheet TESTIMONI

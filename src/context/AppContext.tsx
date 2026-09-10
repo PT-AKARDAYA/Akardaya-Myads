@@ -71,9 +71,37 @@ export const safeNormalizeData = (incoming: any): AppData => {
     spreadsheetUrl: rawCompany.spreadsheetUrl || PERMANENT_GAS_URL,
   };
 
-  const safeOffices = Array.isArray(incoming.offices)
+  const safeOffices: OfficeLocation[] = (Array.isArray(incoming.offices) && incoming.offices.length > 0
     ? incoming.offices
-    : DEFAULT_OFFICE_LOCATIONS;
+    : DEFAULT_OFFICE_LOCATIONS
+  ).map((o: any, idx: number) => {
+    const parseCoord = (val: any, fallback: number) => {
+      if (typeof val === 'number' && !isNaN(val)) return val;
+      if (typeof val === 'string') {
+        const cleaned = parseFloat(val.replace(',', '.').trim());
+        if (!isNaN(cleaned)) return cleaned;
+      }
+      return fallback;
+    };
+
+    const typeUpper = String(o.type || 'CABANG').toUpperCase();
+    const normType = typeUpper.includes('PUSAT') ? 'PUSAT' : 'CABANG';
+
+    return {
+      id: o.id ? String(o.id) : `office_${Date.now()}_${idx}`,
+      name: o.name ? String(o.name) : 'Kantor Cabang',
+      type: normType as 'PUSAT' | 'CABANG',
+      cityName: o.cityName ? String(o.cityName) : 'Jawa Timur',
+      address: o.address ? String(o.address) : '',
+      latitude: parseCoord(o.latitude, 0),
+      longitude: parseCoord(o.longitude, 0),
+      phone: o.phone ? String(o.phone) : undefined,
+      whatsapp: o.whatsapp ? String(o.whatsapp) : undefined,
+      operatingHours: o.operatingHours ? String(o.operatingHours) : undefined,
+      isPrimary: o.isPrimary === true || String(o.isPrimary).toUpperCase() === 'YA',
+      notes: o.notes ? String(o.notes) : undefined,
+    };
+  });
 
   const safeTestimonials = Array.isArray(incoming.testimonials) && incoming.testimonials.length > 0
     ? incoming.testimonials

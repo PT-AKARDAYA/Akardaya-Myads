@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { OfficeLocation } from '../types';
 import { trackRealVisitor } from '../utils/analyticsTracker';
@@ -29,6 +29,18 @@ export const OfficeLocationsMap: React.FC = () => {
   const [filterType, setFilterType] = useState<'ALL' | 'PUSAT' | 'CABANG'>('ALL');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Synchronize selectedOfficeId if offices array updates or current selection is invalid
+  useEffect(() => {
+    if (offices.length > 0) {
+      if (!selectedOfficeId || !offices.some((o) => o.id === selectedOfficeId)) {
+        const defaultOffice = offices.find((o) => o.isPrimary) || offices[0];
+        if (defaultOffice) {
+          setSelectedOfficeId(defaultOffice.id);
+        }
+      }
+    }
+  }, [offices, selectedOfficeId]);
+
   // Filtered offices
   const filteredOffices = offices.filter((office) => {
     if (filterType === 'PUSAT') return office.type === 'PUSAT';
@@ -44,6 +56,37 @@ export const OfficeLocationsMap: React.FC = () => {
     offices[0] ||
     null;
 
+  const getMapEmbedUrl = (office: OfficeLocation) => {
+    if (office.latitude && office.longitude && (office.latitude !== 0 || office.longitude !== 0)) {
+      return `https://www.google.com/maps?q=${office.latitude},${office.longitude}&hl=id&z=16&output=embed`;
+    }
+    const query = encodeURIComponent([office.name, office.address, office.cityName].filter(Boolean).join(', '));
+    return `https://www.google.com/maps?q=${query}&hl=id&z=16&output=embed`;
+  };
+
+  const getDirectionsUrl = (office: OfficeLocation) => {
+    if (office.latitude && office.longitude && (office.latitude !== 0 || office.longitude !== 0)) {
+      return `https://www.google.com/maps/dir/?api=1&destination=${office.latitude},${office.longitude}`;
+    }
+    const query = encodeURIComponent([office.name, office.address, office.cityName].filter(Boolean).join(', '));
+    return `https://www.google.com/maps/dir/?api=1&destination=${query}`;
+  };
+
+  const getMapsSearchUrl = (office: OfficeLocation) => {
+    if (office.latitude && office.longitude && (office.latitude !== 0 || office.longitude !== 0)) {
+      return `https://www.google.com/maps/search/?api=1&query=${office.latitude},${office.longitude}`;
+    }
+    const query = encodeURIComponent([office.name, office.address, office.cityName].filter(Boolean).join(', '));
+    return `https://www.google.com/maps/search/?api=1&query=${query}`;
+  };
+
+  const formatCoord = (val: number | undefined) => {
+    if (typeof val === 'number' && !isNaN(val) && val !== 0) {
+      return val.toFixed(4);
+    }
+    return '-';
+  };
+
   const handleSelectOffice = (officeId: string) => {
     setSelectedOfficeId(officeId);
     const targetOffice = offices.find((o) => o.id === officeId);
@@ -53,7 +96,9 @@ export const OfficeLocationsMap: React.FC = () => {
   };
 
   const handleCopyCoordinates = (office: OfficeLocation) => {
-    const text = `${office.latitude}, ${office.longitude}`;
+    const text = (office.latitude && office.longitude && (office.latitude !== 0 || office.longitude !== 0))
+      ? `${office.latitude}, ${office.longitude}`
+      : `${office.address}, ${office.cityName}`;
     navigator.clipboard?.writeText(text);
     setCopiedId(office.id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -220,7 +265,7 @@ export const OfficeLocationsMap: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Layers className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span>Lat: {selectedOffice.latitude.toFixed(4)}, Lng: {selectedOffice.longitude.toFixed(4)}</span>
+                    <span>Lat: {formatCoord(selectedOffice.latitude)}, Lng: {formatCoord(selectedOffice.longitude)}</span>
                   </div>
                 </div>
               </div>
@@ -229,7 +274,7 @@ export const OfficeLocationsMap: React.FC = () => {
               <div className="relative w-full h-[280px] bg-slate-100 dark:bg-slate-900">
                 <iframe
                   title={`Peta Lokasi ${selectedOffice.name}`}
-                  src={`https://www.google.com/maps?q=${selectedOffice.latitude},${selectedOffice.longitude}&hl=id&z=16&output=embed`}
+                  src={getMapEmbedUrl(selectedOffice)}
                   className="w-full h-full border-0"
                   loading="lazy"
                   allowFullScreen
@@ -248,7 +293,7 @@ export const OfficeLocationsMap: React.FC = () => {
               {/* Action Buttons in Mobile View */}
               <div className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-2">
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${selectedOffice.latitude},${selectedOffice.longitude}`}
+                  href={getDirectionsUrl(selectedOffice)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-sm text-center"
@@ -282,7 +327,7 @@ export const OfficeLocationsMap: React.FC = () => {
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Salin Titik Koordinat ({selectedOffice.latitude}, {selectedOffice.longitude})</span>
+                      <span>Salin Titik Koordinat ({formatCoord(selectedOffice.latitude)}, {formatCoord(selectedOffice.longitude)})</span>
                     </>
                   )}
                 </button>
@@ -354,7 +399,7 @@ export const OfficeLocationsMap: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <Layers className="w-3 h-3 text-slate-400" />
                       <span>
-                        Lat: {office.latitude.toFixed(4)}, Lng: {office.longitude.toFixed(4)}
+                        Lat: {formatCoord(office.latitude)}, Lng: {formatCoord(office.longitude)}
                       </span>
                     </div>
                   </div>
@@ -384,7 +429,7 @@ export const OfficeLocationsMap: React.FC = () => {
                     </button>
 
                     <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${office.latitude},${office.longitude}`}
+                      href={getDirectionsUrl(office)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -421,12 +466,12 @@ export const OfficeLocationsMap: React.FC = () => {
                       </h3>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Koordinat: {selectedOffice.latitude}, {selectedOffice.longitude} ({selectedOffice.cityName})
+                      Koordinat: {formatCoord(selectedOffice.latitude)}, {formatCoord(selectedOffice.longitude)} ({selectedOffice.cityName})
                     </p>
                   </div>
 
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${selectedOffice.latitude},${selectedOffice.longitude}`}
+                    href={getMapsSearchUrl(selectedOffice)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-600 transition-colors shadow-xs shrink-0"
@@ -440,7 +485,7 @@ export const OfficeLocationsMap: React.FC = () => {
                 <div className="relative w-full h-[360px] sm:h-[420px] bg-slate-100 dark:bg-slate-900">
                   <iframe
                     title={`Peta Lokasi ${selectedOffice.name}`}
-                    src={`https://www.google.com/maps?q=${selectedOffice.latitude},${selectedOffice.longitude}&hl=id&z=16&output=embed`}
+                    src={getMapEmbedUrl(selectedOffice)}
                     className="w-full h-full border-0"
                     loading="lazy"
                     allowFullScreen
@@ -480,7 +525,7 @@ export const OfficeLocationsMap: React.FC = () => {
                     </a>
 
                     <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${selectedOffice.latitude},${selectedOffice.longitude}`}
+                      href={getDirectionsUrl(selectedOffice)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-sm"
