@@ -81,13 +81,129 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
   const isTargeted = order.campaignType === 'TARGETED';
   const isLba = order.campaignType === 'LBA';
 
-  // Handle Print Action (Save as PDF or Physical Print)
+  // Handle Print Action (Save as PDF or Physical Print) with dedicated clean print rendering
   const handlePrint = () => {
     setIsPrinting(true);
-    setTimeout(() => {
+
+    if (typeof window === 'undefined') return;
+
+    try {
+      // Find or create a dedicated hidden iframe for printing
+      let printFrame = document.getElementById('akardaya-invoice-print-frame') as HTMLIFrameElement;
+      if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'akardaya-invoice-print-frame';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        printFrame.style.visibility = 'hidden';
+        document.body.appendChild(printFrame);
+      }
+
+      const invoiceElement = invoicePrintRef.current;
+      if (!invoiceElement) {
+        window.print();
+        setIsPrinting(false);
+        return;
+      }
+
+      // Clone content and remove dark-mode specific styling for printing
+      const contentHtml = invoiceElement.innerHTML;
+
+      const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
+      if (!frameDoc) {
+        window.print();
+        setIsPrinting(false);
+        return;
+      }
+
+      frameDoc.open();
+      frameDoc.write(`
+        <!DOCTYPE html>
+        <html lang="id">
+          <head>
+            <meta charset="utf-8">
+            <title>${invoiceNumber} - ${companyConfig.brandName}</title>
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <script>
+              tailwind.config = {
+                theme: {
+                  extend: {
+                    fontFamily: {
+                      sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                      mono: ['"JetBrains Mono"', 'monospace'],
+                    }
+                  }
+                }
+              }
+            </script>
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 8mm 10mm 8mm 10mm;
+              }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                box-sizing: border-box;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                background-color: #ffffff !important;
+                color: #0f172a !important;
+                font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+                font-size: 11.5px;
+                line-height: 1.45;
+              }
+              .print-container {
+                width: 100%;
+                max-width: 780px;
+                margin: 0 auto;
+                background: #ffffff;
+                color: #0f172a;
+              }
+              /* Force light mode styles during print */
+              .dark {
+                color-scheme: light !important;
+              }
+              .no-print {
+                display: none !important;
+              }
+            </style>
+          </head>
+          <body class="p-2">
+            <div class="print-container">
+              ${contentHtml}
+            </div>
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.focus();
+                  window.print();
+                }, 250);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      frameDoc.close();
+
+      setTimeout(() => {
+        setIsPrinting(false);
+      }, 1000);
+    } catch (err) {
+      console.warn('Iframe print fallback to window.print:', err);
       window.print();
       setIsPrinting(false);
-    }, 150);
+    }
   };
 
   // Generate WhatsApp formatted text
@@ -145,26 +261,76 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
 
   return (
     <>
-      {/* Print Specific CSS to isolate the invoice container when printing */}
+      {/* Print Specific CSS to isolate the invoice container when printing via browser Ctrl+P */}
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm 8mm 10mm;
           }
-          #invoice-printable-area, #invoice-printable-area * {
-            visibility: visible;
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            box-sizing: border-box !important;
+          }
+          html, body {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            overflow: visible !important;
+            height: auto !important;
+            min-height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          body > *:not(.akardaya-invoice-modal-root) {
+            display: none !important;
+          }
+          .akardaya-invoice-modal-root {
+            position: static !important;
+            inset: auto !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
+            overflow: visible !important;
+            height: auto !important;
+            width: 100% !important;
+            z-index: auto !important;
+          }
+          .akardaya-invoice-modal-dialog {
+            position: static !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .akardaya-invoice-scroll-area {
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #ffffff !important;
           }
           #invoice-printable-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 16px;
-            background: white !important;
-            color: black !important;
+            position: static !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
             box-shadow: none !important;
             border: none !important;
+            border-radius: 0 !important;
           }
           .no-print {
             display: none !important;
@@ -172,8 +338,8 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
         }
       `}</style>
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
-        <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[94vh] overflow-hidden">
+      <div className="akardaya-invoice-modal-root fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="akardaya-invoice-modal-dialog relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[94vh] overflow-hidden">
           {/* Header Action Bar (No Print) */}
           <div className="no-print px-4 py-3 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex items-center justify-between shrink-0 shadow-sm border-b border-slate-800 z-10">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -197,7 +363,7 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all active:scale-95"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
                 title="Cetak Faktur atau Simpan sebagai PDF"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -207,7 +373,7 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
               <button
                 type="button"
                 onClick={handleSendToWhatsApp}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all active:scale-95"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
                 title="Kirim ke WhatsApp Pelanggan"
               >
                 <Send className="w-3.5 h-3.5" />
@@ -217,7 +383,7 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
               <button
                 type="button"
                 onClick={handleCopyInvoice}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700 cursor-pointer"
                 title="Salin Teks Invoice"
               >
                 {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -227,7 +393,7 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors ml-1"
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors ml-1 cursor-pointer"
                 aria-label="Tutup"
               >
                 <X className="w-4 h-4" />
@@ -236,7 +402,7 @@ export const OrderInvoiceModal: React.FC<OrderInvoiceModalProps> = ({
           </div>
 
           {/* Scrollable Printable Invoice Content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 dark:bg-slate-950">
+          <div className="akardaya-invoice-scroll-area flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 dark:bg-slate-950">
             <div
               id="invoice-printable-area"
               ref={invoicePrintRef}
