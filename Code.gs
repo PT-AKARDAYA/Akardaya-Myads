@@ -147,15 +147,32 @@ function setupSheets() {
     formatHeader(s, "#7C3AED"); // Purple header
   }
 
-  // 7. Sheet PESANAN_LEADS
+  // 7. Sheet PESANAN_LEADS (Lengkap dengan Email Akun MyAds & Parameter Kampanye Profiling Terbaru)
+  const LEADS_HEADERS = [
+    "ID", "WAKTU_ORDER", "NAMA_PELANGGAN", "NO_WHATSAPP", "NAMA_BISNIS", "EMAIL_MYADS",
+    "PAKET_PILIHAN", "ESTIMASI_ANGGARAN", "TOTAL_PEMBAYARAN", "TIPE_KAMPANYE", "SALURAN_MEDIA", "ESTIMASI_JANGKAUAN",
+    "TARGET_WILAYAH", "SASARAN_PROVINSI", "SASARAN_KOTA", "SASARAN_KECAMATAN", "SASARAN_KELURAHAN",
+    "TITIK_GPS_LAT", "TITIK_GPS_LNG", "RADIUS_LBA", "ALAMAT_GPS",
+    "TANGGAL_BROADCAST", "SENDER_ID", "ISI_PESAN_IKLAN", "LINK_WEB",
+    "FILE_LIST_KONTAK", "JUMLAH_KONTAK_FILE",
+    "TARGET_USIA", "TARGET_GENDER", "TARGET_AGAMA", "TARGET_ARPU", "TARGET_SES", "TARGET_DEVICE_OS", "TARGET_PERNIKAHAN", "TARGET_MINAT",
+    "STATUS", "CATATAN"
+  ];
+
   if (!ss.getSheetByName(SHEET_LEADS)) {
     const s = ss.insertSheet(SHEET_LEADS);
-    s.appendRow([
-      "ID", "WAKTU_ORDER", "NAMA_PELANGGAN", "NO_WHATSAPP", "NAMA_BISNIS",
-      "PAKET_PILIHAN", "ESTIMASI_ANGGARAN", "TARGET_WILAYAH", "STATUS", "CATATAN"
-    ]);
+    s.appendRow(LEADS_HEADERS);
     s.setFrozenRows(1);
     formatHeader(s, "#DC2626"); // Red header
+  } else {
+    const s = ss.getSheetByName(SHEET_LEADS);
+    if (s.getLastRow() >= 1) {
+      const curHeaders = s.getRange(1, 1, 1, Math.max(s.getLastColumn(), 1)).getValues()[0];
+      if (curHeaders.indexOf("EMAIL_MYADS") === -1 || curHeaders.length < LEADS_HEADERS.length) {
+        s.getRange(1, 1, 1, LEADS_HEADERS.length).setValues([LEADS_HEADERS]);
+        formatHeader(s, "#DC2626");
+      }
+    }
   }
 
   // 8. Sheet ANALITIK_PENGUNJUNG (Analytics_Logs dengan ISP & Lokasi)
@@ -296,15 +313,46 @@ function doPost(e) {
       const lead = requestBody.lead || {};
       const now = new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
 
+      const targetInterestsStr = Array.isArray(lead.targetInterests)
+        ? lead.targetInterests.join(", ")
+        : (lead.targetInterests || "");
+
       sheet.appendRow([
-        lead.id || "lead-" + Date.now(),
+        lead.id || "ORD-" + Date.now().toString().slice(-6),
         now,
-        lead.clientName || lead.customerName || "",
-        lead.phone || lead.whatsapp || "",
+        lead.customerName || lead.clientName || "",
+        lead.whatsapp || lead.phone || "",
         lead.businessName || "",
-        lead.packageName || lead.selectedPackageName || "",
-        lead.channel || lead.estimatedBudget || "",
+        lead.myAdsEmail || "",
+        lead.selectedPackageName || lead.packageName || "",
+        lead.estimatedBudget || "",
+        lead.totalPayment ? ("Rp " + Number(lead.totalPayment).toLocaleString("id-ID")) : (lead.estimatedBudget || ""),
+        lead.campaignType || "",
+        lead.channelName || lead.channel || "",
+        lead.estimatedReach || "",
         lead.targetCityOrArea || "",
+        lead.targetProvince || "",
+        lead.targetCity || "",
+        lead.targetDistrict || "",
+        lead.targetVillage || "",
+        lead.latitude || "",
+        lead.longitude || "",
+        lead.radiusMeters ? (lead.radiusMeters + " Meter") : "",
+        lead.streetAddress || "",
+        lead.broadcastDate || "",
+        lead.senderName || "",
+        lead.adMessageContent || "",
+        lead.webLink || "",
+        lead.uploadedListFileName ? (lead.uploadedListFileName + (lead.uploadedListFileSize ? (" (" + lead.uploadedListFileSize + ")") : "")) : "",
+        lead.uploadedListFileCount || "",
+        lead.targetAgeGroup || "",
+        lead.targetGender || "",
+        lead.targetReligion || "",
+        lead.targetArpuSpending || "",
+        lead.targetSes || "",
+        lead.targetDeviceOs || "",
+        lead.targetMaritalStatus || "",
+        targetInterestsStr,
         lead.status || "PENDING",
         lead.notes || ""
       ]);
@@ -1051,20 +1099,113 @@ function readLeadsSheet(ss) {
   const sheet = ss.getSheetByName(SHEET_LEADS);
   if (!sheet || sheet.getLastRow() <= 1) return [];
 
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
-  return rows.map(r => ({
-    id: String(r[0]),
-    createdAt: String(r[1]),
-    customerName: String(r[2]),
-    whatsapp: String(r[3]),
-    businessName: r[4] ? String(r[4]) : undefined,
-    selectedPackageId: "",
-    selectedPackageName: String(r[5]),
-    estimatedBudget: String(r[6]),
-    targetCityOrArea: r[7] ? String(r[7]) : undefined,
-    status: String(r[8]) || "PENDING",
-    notes: r[9] ? String(r[9]) : ""
-  }));
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) {
+    return String(h || "").trim().toUpperCase();
+  });
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
+
+  function getVal(row, colName, defaultIndex) {
+    const idx = headers.indexOf(colName);
+    if (idx !== -1 && row[idx] !== undefined && row[idx] !== null && row[idx] !== "") {
+      return row[idx];
+    }
+    if (defaultIndex !== undefined && row[defaultIndex] !== undefined && row[defaultIndex] !== null && row[defaultIndex] !== "") {
+      return row[defaultIndex];
+    }
+    return "";
+  }
+
+  return rows.map(function(r) {
+    var rawInterests = getVal(r, "TARGET_MINAT");
+    var interests = [];
+    if (rawInterests) {
+      interests = String(rawInterests).split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+    }
+
+    var totalPaymentRaw = getVal(r, "TOTAL_PEMBAYARAN");
+    var totalPaymentNum = undefined;
+    if (totalPaymentRaw) {
+      var parsedNum = Number(String(totalPaymentRaw).replace(/\D/g, ""));
+      if (!isNaN(parsedNum) && parsedNum > 0) totalPaymentNum = parsedNum;
+    }
+
+    var latRaw = getVal(r, "TITIK_GPS_LAT");
+    var latNum = undefined;
+    if (latRaw !== "") {
+      var parsedLat = typeof latRaw === "number" ? latRaw : parseFloat(String(latRaw).replace(",", "."));
+      if (!isNaN(parsedLat)) latNum = parsedLat;
+    }
+
+    var lngRaw = getVal(r, "TITIK_GPS_LNG");
+    var lngNum = undefined;
+    if (lngRaw !== "") {
+      var parsedLng = typeof lngRaw === "number" ? lngRaw : parseFloat(String(lngRaw).replace(",", "."));
+      if (!isNaN(parsedLng)) lngNum = parsedLng;
+    }
+
+    var radiusRaw = getVal(r, "RADIUS_LBA");
+    var radiusNum = undefined;
+    if (radiusRaw) {
+      var parsedRadius = Number(String(radiusRaw).replace(/\D/g, ""));
+      if (!isNaN(parsedRadius) && parsedRadius > 0) radiusNum = parsedRadius;
+    }
+
+    var reachRaw = getVal(r, "ESTIMASI_JANGKAUAN");
+    var reachNum = undefined;
+    if (reachRaw) {
+      var parsedReach = Number(String(reachRaw).replace(/\D/g, ""));
+      if (!isNaN(parsedReach)) reachNum = parsedReach;
+    }
+
+    var fileCountRaw = getVal(r, "JUMLAH_KONTAK_FILE");
+    var fileCountNum = undefined;
+    if (fileCountRaw) {
+      var parsedCount = Number(String(fileCountRaw).replace(/\D/g, ""));
+      if (!isNaN(parsedCount)) fileCountNum = parsedCount;
+    }
+
+    return {
+      id: String(getVal(r, "ID", 0)),
+      createdAt: String(getVal(r, "WAKTU_ORDER", 1)),
+      customerName: String(getVal(r, "NAMA_PELANGGAN", 2)),
+      whatsapp: String(getVal(r, "NO_WHATSAPP", 3)),
+      businessName: getVal(r, "NAMA_BISNIS", 4) ? String(getVal(r, "NAMA_BISNIS", 4)) : undefined,
+      myAdsEmail: getVal(r, "EMAIL_MYADS") ? String(getVal(r, "EMAIL_MYADS")) : undefined,
+      selectedPackageId: "",
+      selectedPackageName: String(getVal(r, "PAKET_PILIHAN", 5)),
+      estimatedBudget: String(getVal(r, "ESTIMASI_ANGGARAN", 6)),
+      totalPayment: totalPaymentNum,
+      campaignType: getVal(r, "TIPE_KAMPANYE") ? String(getVal(r, "TIPE_KAMPANYE")) : undefined,
+      channelName: getVal(r, "SALURAN_MEDIA") ? String(getVal(r, "SALURAN_MEDIA")) : undefined,
+      estimatedReach: reachNum,
+      targetCityOrArea: getVal(r, "TARGET_WILAYAH", 7) ? String(getVal(r, "TARGET_WILAYAH", 7)) : undefined,
+      targetProvince: getVal(r, "SASARAN_PROVINSI") ? String(getVal(r, "SASARAN_PROVINSI")) : undefined,
+      targetCity: getVal(r, "SASARAN_KOTA") ? String(getVal(r, "SASARAN_KOTA")) : undefined,
+      targetDistrict: getVal(r, "SASARAN_KECAMATAN") ? String(getVal(r, "SASARAN_KECAMATAN")) : undefined,
+      targetVillage: getVal(r, "SASARAN_KELURAHAN") ? String(getVal(r, "SASARAN_KELURAHAN")) : undefined,
+      latitude: latNum,
+      longitude: lngNum,
+      radiusMeters: radiusNum,
+      streetAddress: getVal(r, "ALAMAT_GPS") ? String(getVal(r, "ALAMAT_GPS")) : undefined,
+      broadcastDate: getVal(r, "TANGGAL_BROADCAST") ? String(getVal(r, "TANGGAL_BROADCAST")) : undefined,
+      senderName: getVal(r, "SENDER_ID") ? String(getVal(r, "SENDER_ID")) : undefined,
+      adMessageContent: getVal(r, "ISI_PESAN_IKLAN") ? String(getVal(r, "ISI_PESAN_IKLAN")) : undefined,
+      webLink: getVal(r, "LINK_WEB") ? String(getVal(r, "LINK_WEB")) : undefined,
+      uploadedListFileName: getVal(r, "FILE_LIST_KONTAK") ? String(getVal(r, "FILE_LIST_KONTAK")) : undefined,
+      uploadedListFileCount: fileCountNum,
+      targetAgeGroup: getVal(r, "TARGET_USIA") ? String(getVal(r, "TARGET_USIA")) : undefined,
+      targetGender: getVal(r, "TARGET_GENDER") ? String(getVal(r, "TARGET_GENDER")) : undefined,
+      targetReligion: getVal(r, "TARGET_AGAMA") ? String(getVal(r, "TARGET_AGAMA")) : undefined,
+      targetArpuSpending: getVal(r, "TARGET_ARPU") ? String(getVal(r, "TARGET_ARPU")) : undefined,
+      targetSes: getVal(r, "TARGET_SES") ? String(getVal(r, "TARGET_SES")) : undefined,
+      targetDeviceOs: getVal(r, "TARGET_DEVICE_OS") ? String(getVal(r, "TARGET_DEVICE_OS")) : undefined,
+      targetMaritalStatus: getVal(r, "TARGET_PERNIKAHAN") ? String(getVal(r, "TARGET_PERNIKAHAN")) : undefined,
+      targetInterests: interests.length > 0 ? interests : undefined,
+      status: String(getVal(r, "STATUS", 8)) || "PENDING",
+      notes: getVal(r, "CATATAN", 9) ? String(getVal(r, "CATATAN", 9)) : ""
+    };
+  });
 }
 
 /**
@@ -1250,6 +1391,75 @@ function saveAllSheets(ss, data) {
       t.verified ? "YA" : "TIDAK"
     ]);
     s.getRange(2, 1, testRows.length, testRows[0].length).setValues(testRows);
+  }
+
+  // 7. Tulis Sheet PESANAN_LEADS (Sinkronisasi Admin Lead Status / Data)
+  if (data.orders && Array.isArray(data.orders) && data.orders.length > 0) {
+    let sLeads = ss.getSheetByName(SHEET_LEADS);
+    if (!sLeads) {
+      sLeads = ss.insertSheet(SHEET_LEADS);
+      sLeads.appendRow([
+        "ID", "WAKTU_ORDER", "NAMA_PELANGGAN", "NO_WHATSAPP", "NAMA_BISNIS", "EMAIL_MYADS",
+        "PAKET_PILIHAN", "ESTIMASI_ANGGARAN", "TOTAL_PEMBAYARAN", "TIPE_KAMPANYE", "SALURAN_MEDIA", "ESTIMASI_JANGKAUAN",
+        "TARGET_WILAYAH", "SASARAN_PROVINSI", "SASARAN_KOTA", "SASARAN_KECAMATAN", "SASARAN_KELURAHAN",
+        "TITIK_GPS_LAT", "TITIK_GPS_LNG", "RADIUS_LBA", "ALAMAT_GPS",
+        "TANGGAL_BROADCAST", "SENDER_ID", "ISI_PESAN_IKLAN", "LINK_WEB",
+        "FILE_LIST_KONTAK", "JUMLAH_KONTAK_FILE",
+        "TARGET_USIA", "TARGET_GENDER", "TARGET_AGAMA", "TARGET_ARPU", "TARGET_SES", "TARGET_DEVICE_OS", "TARGET_PERNIKAHAN", "TARGET_MINAT",
+        "STATUS", "CATATAN"
+      ]);
+      sLeads.setFrozenRows(1);
+      formatHeader(sLeads, "#DC2626");
+    }
+
+    if (sLeads.getLastRow() > 1) {
+      sLeads.getRange(2, 1, sLeads.getLastRow() - 1, sLeads.getLastColumn()).clearContent();
+    }
+
+    const orderRows = data.orders.map(function(o) {
+      const interestsStr = Array.isArray(o.targetInterests) ? o.targetInterests.join(", ") : (o.targetInterests || "");
+      return [
+        o.id || ("ORD-" + Date.now().toString().slice(-6)),
+        o.createdAt || now,
+        o.customerName || "",
+        o.whatsapp || "",
+        o.businessName || "",
+        o.myAdsEmail || "",
+        o.selectedPackageName || "",
+        o.estimatedBudget || "",
+        o.totalPayment ? ("Rp " + Number(o.totalPayment).toLocaleString("id-ID")) : (o.estimatedBudget || ""),
+        o.campaignType || "",
+        o.channelName || "",
+        o.estimatedReach || "",
+        o.targetCityOrArea || "",
+        o.targetProvince || "",
+        o.targetCity || "",
+        o.targetDistrict || "",
+        o.targetVillage || "",
+        o.latitude || "",
+        o.longitude || "",
+        o.radiusMeters ? (o.radiusMeters + " Meter") : "",
+        o.streetAddress || "",
+        o.broadcastDate || "",
+        o.senderName || "",
+        o.adMessageContent || "",
+        o.webLink || "",
+        o.uploadedListFileName ? (o.uploadedListFileName + (o.uploadedListFileSize ? (" (" + o.uploadedListFileSize + ")") : "")) : "",
+        o.uploadedListFileCount || "",
+        o.targetAgeGroup || "",
+        o.targetGender || "",
+        o.targetReligion || "",
+        o.targetArpuSpending || "",
+        o.targetSes || "",
+        o.targetDeviceOs || "",
+        o.targetMaritalStatus || "",
+        interestsStr,
+        o.status || "PENDING",
+        o.notes || ""
+      ];
+    });
+
+    sLeads.getRange(2, 1, orderRows.length, orderRows[0].length).setValues(orderRows);
   }
 }
 

@@ -419,24 +419,54 @@ async function startServer() {
   // Submit order lead / consultation request
   app.post('/api/orders', (req, res) => {
     try {
-      const { customerName, whatsapp, businessName, selectedPackageId, selectedPackageName, estimatedBudget, targetCityOrArea, notes } = req.body;
+      const body = req.body || {};
+      const customerName = body.customerName || body.clientName;
+      const whatsapp = body.whatsapp || body.phone;
 
       if (!customerName || !whatsapp) {
         return res.status(400).json({ error: 'Customer name and WhatsApp number are required' });
       }
 
       const newOrder: OrderLead = {
-        id: `lead_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: body.id || `ORD-${Date.now().toString().slice(-6)}`,
         customerName: String(customerName).trim(),
         whatsapp: String(whatsapp).trim(),
-        businessName: businessName ? String(businessName).trim() : '',
-        selectedPackageId: selectedPackageId || 'custom',
-        selectedPackageName: selectedPackageName || 'Konsultasi Iklan',
-        estimatedBudget: estimatedBudget || 'Fleksibel',
-        targetCityOrArea: targetCityOrArea || '',
-        notes: notes || '',
-        createdAt: new Date().toISOString(),
-        status: 'PENDING',
+        businessName: body.businessName ? String(body.businessName).trim() : '',
+        myAdsEmail: body.myAdsEmail ? String(body.myAdsEmail).trim() : undefined,
+        selectedPackageId: body.selectedPackageId || 'custom',
+        selectedPackageName: body.selectedPackageName || body.packageName || 'Konsultasi Iklan',
+        estimatedBudget: body.estimatedBudget || 'Fleksibel',
+        totalPayment: body.totalPayment ? Number(body.totalPayment) : undefined,
+        campaignType: body.campaignType,
+        channelName: body.channelName,
+        estimatedReach: body.estimatedReach ? Number(body.estimatedReach) : undefined,
+        targetCityOrArea: body.targetCityOrArea || '',
+        targetProvince: body.targetProvince,
+        targetCity: body.targetCity,
+        targetDistrict: body.targetDistrict,
+        targetVillage: body.targetVillage,
+        latitude: body.latitude !== undefined ? Number(body.latitude) : undefined,
+        longitude: body.longitude !== undefined ? Number(body.longitude) : undefined,
+        radiusMeters: body.radiusMeters !== undefined ? Number(body.radiusMeters) : undefined,
+        streetAddress: body.streetAddress,
+        broadcastDate: body.broadcastDate,
+        senderName: body.senderName,
+        adMessageContent: body.adMessageContent,
+        webLink: body.webLink,
+        uploadedListFileName: body.uploadedListFileName,
+        uploadedListFileCount: body.uploadedListFileCount ? Number(body.uploadedListFileCount) : undefined,
+        uploadedListFileSize: body.uploadedListFileSize,
+        targetAgeGroup: body.targetAgeGroup,
+        targetGender: body.targetGender,
+        targetReligion: body.targetReligion,
+        targetArpuSpending: body.targetArpuSpending,
+        targetSes: body.targetSes,
+        targetDeviceOs: body.targetDeviceOs,
+        targetMaritalStatus: body.targetMaritalStatus,
+        targetInterests: Array.isArray(body.targetInterests) ? body.targetInterests : [],
+        notes: body.notes || '',
+        createdAt: body.createdAt || new Date().toISOString(),
+        status: body.status || 'PENDING',
       };
 
       appData.orders = [newOrder, ...(appData.orders || [])];

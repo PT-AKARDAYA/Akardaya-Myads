@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -13,7 +13,10 @@ import {
   Building,
   Target,
   Layers,
-  RotateCcw
+  RotateCcw,
+  RefreshCw,
+  Eye,
+  Globe
 } from 'lucide-react';
 
 interface GpsLocationResult {
@@ -35,20 +38,42 @@ interface GpsLocationMapPickerModalProps {
   initialAddress?: string;
 }
 
-// Fix default leaflet icons
+// Fix default leaflet marker icon
 const customIcon = L.divIcon({
   className: 'custom-leaflet-marker',
   html: `
     <div style="position: relative; display: flex; align-items: center; justify-content: center; transform: translate(-50%, -100%);">
-      <div style="background: linear-gradient(135deg, #2563eb, #1d4ed8); width: 38px; height: 38px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid #ffffff; box-shadow: 0 10px 15px -3px rgba(37,99,235,0.4), 0 4px 6px -4px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center;">
+      <div style="background: linear-gradient(135deg, #2563eb, #1d4ed8); width: 38px; height: 38px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid #ffffff; box-shadow: 0 10px 15px -3px rgba(37,99,235,0.45), 0 4px 6px -4px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center;">
         <div style="width: 12px; height: 12px; background: white; border-radius: 50%;"></div>
       </div>
-      <div style="position: absolute; bottom: -8px; width: 14px; height: 5px; background: rgba(0,0,0,0.25); border-radius: 50%; filter: blur(1px);"></div>
+      <div style="position: absolute; bottom: -8px; width: 14px; height: 5px; background: rgba(0,0,0,0.3); border-radius: 50%; filter: blur(1px);"></div>
     </div>
   `,
   iconSize: [0, 0],
   iconAnchor: [0, 0],
 });
+
+type MapStyleType = 'voyager' | 'osm' | 'satellite';
+
+const TILE_LAYERS: Record<MapStyleType, { url: string; subdomains?: string[]; attribution: string; maxZoom: number }> = {
+  voyager: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 20,
+  },
+  osm: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 19,
+  },
+};
 
 export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps> = ({
   isOpen,
@@ -61,6 +86,7 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
 
@@ -75,6 +101,7 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [mapStyle, setMapStyle] = useState<MapStyleType>('voyager');
 
   // Synchronize state when modal opens
   useEffect(() => {
@@ -123,17 +150,53 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
     }
   };
 
+  // Switch Tile Layer
+  const setLayerStyle = useCallback((style: MapStyleType) => {
+    setMapStyle(style);
+    if (!mapInstanceRef.current) return;
+
+    if (tileLayerRef.current) {
+      mapInstanceRef.current.removeLayer(tileLayerRef.current);
+    }
+
+    const cfg = TILE_LAYERS[style];
+    const newLayer = L.tileLayer(cfg.url, {
+      subdomains: cfg.subdomains || 'abc',
+      attribution: cfg.attribution,
+      maxZoom: cfg.maxZoom,
+      crossOrigin: true,
+    }).addTo(mapInstanceRef.current);
+
+    tileLayerRef.current = newLayer;
+  }, []);
+
+  // Invalidate map size
+  const triggerMapResize = useCallback(() => {
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.invalidateSize({ pan: false });
+      } catch (e) {
+        console.warn('Leaflet invalidateSize error:', e);
+      }
+    }
+  }, []);
+
   // Initialize and update Leaflet Map
   useEffect(() => {
     if (!isOpen) {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        tileLayerRef.current = null;
+        markerRef.current = null;
+        circleRef.current = null;
       }
       return;
     }
 
-    const timer = setTimeout(() => {
+    let resizeObserver: ResizeObserver | null = null;
+
+    const initTimer = setTimeout(() => {
       if (!mapContainerRef.current) return;
 
       if (!mapInstanceRef.current) {
@@ -141,14 +204,19 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
           center: [lat, lng],
           zoom: 15,
           zoomControl: false,
+          preferCanvas: true,
         });
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 19,
+        const cfg = TILE_LAYERS[mapStyle];
+        const tileLayer = L.tileLayer(cfg.url, {
+          subdomains: cfg.subdomains || 'abc',
+          attribution: cfg.attribution,
+          maxZoom: cfg.maxZoom,
+          crossOrigin: true,
         }).addTo(map);
+        tileLayerRef.current = tileLayer;
 
         // Marker
         const marker = L.marker([lat, lng], {
@@ -162,8 +230,8 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
           color: '#2563eb',
           fillColor: '#3b82f6',
           fillOpacity: 0.18,
-          weight: 2,
-          dashArray: '5, 5',
+          weight: 2.5,
+          dashArray: '6, 6',
         }).addTo(map);
 
         // Marker Drag End Handler
@@ -195,10 +263,26 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
         circleRef.current?.setLatLng([lat, lng]);
         circleRef.current?.setRadius(radiusMeters);
       }
-    }, 120);
+
+      // Schedule subsequent invalidateSize calls to guarantee tile rendering as animations finish
+      [50, 150, 300, 600, 1200].forEach((delay) => {
+        setTimeout(triggerMapResize, delay);
+      });
+
+      // Observe container resize
+      if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+        resizeObserver = new ResizeObserver(() => {
+          triggerMapResize();
+        });
+        resizeObserver.observe(mapContainerRef.current);
+      }
+    }, 60);
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(initTimer);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [isOpen]);
 
@@ -220,8 +304,17 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
       markerRef.current?.setLatLng([newLat, newLng]);
       circleRef.current?.setLatLng([newLat, newLng]);
       if (newRadius !== undefined) circleRef.current?.setRadius(newRadius);
+      triggerMapResize();
     }
     reverseGeocode(newLat, newLng);
+  };
+
+  // Center on current pin
+  const handleRecenterPin = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView([lat, lng], 15);
+      triggerMapResize();
+    }
   };
 
   // "Gunakan Lokasi Saya (GPS)" Handler
@@ -300,20 +393,20 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
     }
   };
 
-  // Radius Presets
+  // Radius Preset Buttons
   const radiusPresets = [
-    { label: '300m', meters: 300, desc: 'Radius Dekat / Toko Lokal' },
-    { label: '500m', meters: 500, desc: 'Jangkauan 500 Meter' },
-    { label: '1 km', meters: 1000, desc: 'Standar Toko (1000m)' },
-    { label: '1.5 km', meters: 1500, desc: 'Radius 1.5 Kilometer' },
-    { label: '2 km', meters: 2000, desc: 'Jangkauan Luas (2000m)' },
-    { label: '3 km', meters: 3000, desc: 'Maksimal LBA (3000m)' },
+    { label: '300m', meters: 300 },
+    { label: '500m', meters: 500 },
+    { label: '1 km', meters: 1000 },
+    { label: '1.5 km', meters: 1500 },
+    { label: '2 km', meters: 2000 },
+    { label: '3 km', meters: 3000 },
   ];
 
-  // Save Handler
   const handleSaveLocation = () => {
-    const radDisplay = radiusMeters >= 1000 ? `${(radiusMeters / 1000).toFixed(1).replace('.0', '')} km` : `${radiusMeters} Meter`;
-    const formattedTarget = `${streetAddress || 'Titik Sasaran LBA'} (Radius ${radDisplay})`;
+    const formattedTarget = streetAddress.trim()
+      ? `${streetAddress.trim()} (Radius: ${radiusMeters >= 1000 ? `${(radiusMeters / 1000).toFixed(1).replace('.0', '')} km` : `${radiusMeters}m`})`
+      : `Koordinat ${lat.toFixed(5)}, ${lng.toFixed(5)} (Radius: ${radiusMeters}m)`;
 
     onSave({
       latitude: parseFloat(lat.toFixed(6)),
@@ -329,8 +422,8 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[94vh] overflow-hidden">
         {/* Header */}
         <div className="px-4 py-3 sm:px-5 sm:py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -417,29 +510,78 @@ export const GpsLocationMapPickerModal: React.FC<GpsLocationMapPickerModalProps>
           )}
         </div>
 
-        {/* Map Container */}
-        <div className="relative flex-1 min-h-[220px] sm:min-h-[280px] bg-slate-100 dark:bg-slate-950 overflow-hidden">
-          <div ref={mapContainerRef} className="w-full h-full z-0" />
+        {/* Map Container Area */}
+        <div className="relative w-full h-[280px] sm:h-[350px] bg-slate-100 dark:bg-slate-950 overflow-hidden shrink-0 border-b border-slate-200 dark:border-slate-800">
+          {/* Real Leaflet Map DOM Element */}
+          <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }} />
 
           {/* Quick instructions badge on top of map */}
-          <div className="absolute top-2 left-2 z-10 pointer-events-none">
-            <div className="px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-semibold flex items-center gap-1.5 shadow-md border border-white/20">
+          <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+            <div className="px-2.5 py-1 rounded-lg bg-slate-900/85 backdrop-blur-xs text-white text-[10px] font-semibold flex items-center gap-1.5 shadow-md border border-white/20">
               <Compass className="w-3 h-3 text-blue-400" />
               <span>Geser pin biru atau klik di peta</span>
             </div>
           </div>
 
           {/* Live Radius badge on top right */}
-          <div className="absolute top-2 right-2 z-10 pointer-events-none">
-            <div className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-extrabold shadow-md flex items-center gap-1">
+          <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
+            <div className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-extrabold shadow-md flex items-center gap-1 border border-white/20">
               <span>Radius:</span>
               <span>{radiusMeters >= 1000 ? `${(radiusMeters / 1000).toFixed(1).replace('.0', '')} km` : `${radiusMeters}m`}</span>
             </div>
           </div>
+
+          {/* Map Controls (Layer Style & Recenter) */}
+          <div className="absolute bottom-2.5 left-2.5 z-10 flex items-center gap-1.5">
+            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs p-1 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setLayerStyle('voyager')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  mapStyle === 'voyager'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                Peta Jalan
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayerStyle('osm')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  mapStyle === 'osm'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                OSM
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayerStyle('satellite')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  mapStyle === 'satellite'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                Satelit
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRecenterPin}
+              title="Tengahkan Pin"
+              className="p-1.5 rounded-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 shadow-lg border border-slate-200 dark:border-slate-700 transition-all active:scale-95"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Radius Controller & Location Details */}
-        <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-3 shrink-0 overflow-y-auto max-h-[35vh]">
+        <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 space-y-3 shrink-0 overflow-y-auto max-h-[35vh]">
           {/* Radius Slider Section (300 Meter - 3 KM) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
