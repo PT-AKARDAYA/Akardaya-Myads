@@ -101,6 +101,7 @@ export interface OrderLead {
   customerName: string;
   whatsapp: string;
   businessName?: string;
+  myAdsEmail?: string; // Email Akun MyAds (khusus topup saldo)
   selectedPackageId: string;
   selectedPackageName: string;
   estimatedBudget: string;

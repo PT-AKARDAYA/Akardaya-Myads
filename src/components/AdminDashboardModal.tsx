@@ -2405,6 +2405,11 @@ export const AdminDashboardModal: React.FC = () => {
                         {order.targetCityOrArea && (
                           <p className="text-slate-500">📍 Area: {order.targetCityOrArea}</p>
                         )}
+                        {order.myAdsEmail && (
+                          <p className="text-blue-600 dark:text-blue-400 font-semibold text-[11px] bg-blue-50 dark:bg-blue-950/40 p-1.5 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                            ✉️ Email Akun MyAds: <strong>{order.myAdsEmail}</strong>
+                          </p>
+                        )}
                         {(order.latitude !== undefined && order.longitude !== undefined) && (
                           <p className="text-blue-600 dark:text-blue-400 font-mono text-[11px]">
                             🗺️ GPS: Lat {order.latitude}, Lng {order.longitude} (Radius {order.radiusMeters >= 1000 ? `${(order.radiusMeters / 1000).toFixed(1)} km` : `${order.radiusMeters} m`})

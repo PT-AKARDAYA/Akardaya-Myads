@@ -60,6 +60,7 @@ import {
   FileCheck,
   CheckSquare,
   Landmark,
+  Mail,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -127,6 +128,7 @@ export const OrderModal: React.FC = () => {
   const [whatsapp, setWhatsapp] = useState<string>('');
   const [businessName, setBusinessName] = useState<string>('');
   const [targetCityOrArea, setTargetCityOrArea] = useState<string>('');
+  const [myAdsEmail, setMyAdsEmail] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
   // LBA GPS States
@@ -801,12 +803,13 @@ export const OrderModal: React.FC = () => {
       `Nama Pemesan: ${createdOrder.customerName}\n` +
       `Nama Usaha: ${createdOrder.businessName || '-'}\n` +
       `No. WhatsApp: ${createdOrder.whatsapp}\n` +
+      (createdOrder.myAdsEmail ? `Email Akun MyAds: ${createdOrder.myAdsEmail}\n` : '') +
       `Paket: ${createdOrder.selectedPackageName}\n` +
       `Tipe Kampanye: ${createdOrder.campaignType}\n` +
       `Saluran Media: ${createdOrder.channelName}\n` +
       `Estimasi Jangkauan: ~${createdOrder.estimatedReach?.toLocaleString('id-ID')} Penerima\n` +
       `Target Lokasi: ${createdOrder.targetCityOrArea || 'Nasional'}\n` +
-      (createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup
+      (!isTopupPackage && (createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup)
         ? `--- KAPABILITAS TARGETING ---\n` +
           `• Rentang Usia: ${createdOrder.targetAgeGroup || 'Semua Usia'}\n` +
           `• Segmentasi Religi: ${createdOrder.targetReligion || 'Semua Agama'}\n` +
@@ -821,19 +824,19 @@ export const OrderModal: React.FC = () => {
           )
         : ''
       ) +
-      (createdOrder.latitude && createdOrder.longitude
+      (!isTopupPackage && createdOrder.latitude && createdOrder.longitude
         ? `Titik GPS & Radius: Lat: ${createdOrder.latitude}, Lng: ${createdOrder.longitude} (Radius: ${createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`})\n` +
           (createdOrder.streetAddress ? `Alamat Jalan: ${createdOrder.streetAddress}\n` : '')
         : ''
       ) +
-      (createdOrder.uploadedListFileName
+      (!isTopupPackage && createdOrder.uploadedListFileName
         ? `File List Kontak: ${createdOrder.uploadedListFileName} (${createdOrder.uploadedListFileSize || ''}${createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount} Nomor` : ''})\n`
         : ''
       ) +
-      (createdOrder.broadcastDate ? `Tanggal Broadcast (H+3): ${createdOrder.broadcastDate}\n` : '') +
-      (createdOrder.senderName ? `Sender ID / Masking: ${createdOrder.senderName}\n` : '') +
-      (createdOrder.adMessageContent ? `Isi Pesan Iklan: "${createdOrder.adMessageContent}"\n` : '') +
-      (createdOrder.webLink ? `Link Web / Promo: ${createdOrder.webLink}\n` : '') +
+      (!isTopupPackage && createdOrder.broadcastDate ? `Tanggal Broadcast (H+3): ${createdOrder.broadcastDate}\n` : '') +
+      (!isTopupPackage && createdOrder.senderName ? `Sender ID / Masking: ${createdOrder.senderName}\n` : '') +
+      (!isTopupPackage && createdOrder.adMessageContent ? `Isi Pesan Iklan: "${createdOrder.adMessageContent}"\n` : '') +
+      (!isTopupPackage && createdOrder.webLink ? `Link Web / Promo: ${createdOrder.webLink}\n` : '') +
       (isOneKlik
         ? `Bonus Saldo: Tidak Ada (Paket One Klik Terima Jadi)\n`
         : `Bonus Saldo: +${bonusPercent}%${bonusAmount > 0 ? ` (+Rp ${bonusAmount.toLocaleString('id-ID')})` : ''}\n` +
@@ -856,6 +859,10 @@ export const OrderModal: React.FC = () => {
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !whatsapp.trim()) return;
+    if (isTopupPackage && !myAdsEmail.trim()) {
+      alert('Mohon masukkan email Akun Telkomsel MyAds Anda.');
+      return;
+    }
     if (!isTopupPackage && selectedChannelsList.length === 0) {
       alert('Pilih minimal 1 jenis saluran media iklan.');
       return;
@@ -883,6 +890,7 @@ export const OrderModal: React.FC = () => {
       customerName: customerName.trim(),
       whatsapp: cleanWa,
       businessName: businessName.trim(),
+      myAdsEmail: myAdsEmail.trim(),
       selectedPackageId: currentPkg?.id || 'custom',
       selectedPackageName: currentPkg?.name || 'Paket Promosi Iklan',
       estimatedBudget: `Rp ${effectiveTotalPayment.toLocaleString('id-ID')}`,
@@ -961,59 +969,80 @@ export const OrderModal: React.FC = () => {
       accountHolder: companyConfig.bankAccountHolder || 'PT Akardaya Telekomunikasi Indonesia',
     };
 
-    const waText =
-      `Halo Admin ${companyConfig.brandName}, saya telah melakukan pemesanan iklan melalui aplikasi:\n\n` +
-      `📋 *DETAIL PESANAN*\n` +
-      `• No. Order: *${createdOrder.id}*\n` +
-      `• Nama Pemesan: *${createdOrder.customerName}*\n` +
-      `• Nama Usaha/Brand: *${createdOrder.businessName || '-'}*\n` +
-      `• No. WhatsApp: *${createdOrder.whatsapp}*\n\n` +
-      `🎯 *KONFIGURASI KAMPANYE*\n` +
-      `• Paket Pilihan: *${createdOrder.selectedPackageName}*\n` +
-      `• Tipe Kampanye: *${createdOrder.campaignType}*\n` +
-      `• Saluran Media: *${createdOrder.channelName}*\n` +
-      `• Target Lokasi/Area: *${createdOrder.targetCityOrArea || 'Nasional'}*\n` +
-      (createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup
-        ? `\n🎯 *KAPABILITAS TARGETING*\n` +
-          `• Rentang Usia: *${createdOrder.targetAgeGroup || 'Semua Usia'}*\n` +
-          `• Segmentasi Religi: *${createdOrder.targetReligion || 'Semua Agama'}*\n` +
-          `• Jenis Kelamin: *${createdOrder.targetGender || 'Semua Gender'}*\n` +
-          `• ARPU Spending: *${createdOrder.targetArpuSpending || 'Semua ARPU'}*\n` +
-          `• Status SES: *${createdOrder.targetSes || 'Semua SES'}*\n` +
-          `• Device & OS: *${createdOrder.targetDeviceOs || 'Semua Device'}*\n` +
-          `• Status Pernikahan: *${createdOrder.targetMaritalStatus || 'Semua Status'}*\n` +
-          (createdOrder.targetInterests && createdOrder.targetInterests.length > 0
-            ? `• Minat & Perilaku: *${createdOrder.targetInterests.join(', ')}*\n`
-            : ''
-          ) + '\n'
-        : ''
-      ) +
-      (createdOrder.latitude && createdOrder.longitude
-        ? `• Titik GPS & Radius: *Lat: ${createdOrder.latitude}, Lng: ${createdOrder.longitude} (Radius: ${createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`})*\n` +
-          (createdOrder.streetAddress ? `• Alamat Jalan: *${createdOrder.streetAddress}*\n` : '')
-        : ''
-      ) +
-      (createdOrder.uploadedListFileName
-        ? `• File List Kontak: *${createdOrder.uploadedListFileName}* (${createdOrder.uploadedListFileSize || ''}${createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount} Nomor` : ''})\n`
-        : ''
-      ) +
-      (createdOrder.broadcastDate ? `• Tanggal Broadcast (H+3): *${createdOrder.broadcastDate}*\n` : '') +
-      (createdOrder.senderName ? `• Sender / Masking: *${createdOrder.senderName}*\n` : '') +
-      (createdOrder.adMessageContent ? `• Isi Pesan Iklan (160 char): *"${createdOrder.adMessageContent}"*\n` : '') +
-      (createdOrder.webLink ? `• Link Web/Promo: *${createdOrder.webLink}*\n` : '') +
-      `• Estimasi Jangkauan: *~${createdOrder.estimatedReach?.toLocaleString('id-ID')} Penerima*\n` +
-      (isOneKlik
-        ? `• Bonus Saldo: *Tidak Ada (Paket One Klik Terima Jadi)*\n`
-        : `• Bonus Saldo: *+${bonusPercent}%${bonusAmount > 0 ? ` (+Rp ${bonusAmount.toLocaleString('id-ID')})` : ''}*\n` +
-          (bonusAmount > 0 ? `• Total Saldo Masuk Akun: *Rp ${(effectiveTotalSubtotal + bonusAmount).toLocaleString('id-ID')}*\n` : '')
-      ) +
-      (createdOrder.notes ? `• Catatan Khusus: ${createdOrder.notes}\n\n` : '\n') +
-      `💳 *PEMBAYARAN RESMI*\n` +
-      `• Total Transfer: *Rp ${createdOrder.totalPayment?.toLocaleString('id-ID')}*\n` +
-      `• Bank Tujuan: *${targetBank.bankName}*\n` +
-      `• No. Rekening: *${targetBank.accountNumber}*\n` +
-      `• Atas Nama: *${targetBank.accountHolder}*\n\n` +
-      `Bukti transfer pembayaran akan saya lampirkan di chat ini. Mohon verifikasi & aktivasi jadwal kampanye iklan. Terima kasih!`;
+    const waText = isTopupPackage
+      ? `Halo Admin ${companyConfig.brandName}, saya telah melakukan pemesanan Top-Up Saldo MyAds melalui aplikasi:\n\n` +
+        `📋 *DETAIL PESANAN TOP-UP SALDO*\n` +
+        `• No. Order: *${createdOrder.id}*\n` +
+        `• Nama Pemesan: *${createdOrder.customerName}*\n` +
+        `• Nama Usaha/Brand: *${createdOrder.businessName || '-'}*\n` +
+        `• No. WhatsApp: *${createdOrder.whatsapp}*\n` +
+        `• Email Akun MyAds: *${createdOrder.myAdsEmail || '-'}*\n` +
+        `• Sasaran Lokasi/Area: *${createdOrder.targetCityOrArea || 'Nasional'}*\n\n` +
+        `💰 *RINCIAN DEPOSIT SALDO*\n` +
+        `• Paket Pilihan: *${createdOrder.selectedPackageName}*\n` +
+        `• Nominal Top-Up: *Rp ${createdOrder.totalPayment?.toLocaleString('id-ID')}*\n` +
+        `• Bonus Saldo: *+${bonusPercent}%${bonusAmount > 0 ? ` (+Rp ${bonusAmount.toLocaleString('id-ID')})` : ''}*\n` +
+        `• Total Saldo Masuk Akun: *Rp ${((createdOrder.totalPayment || 0) + bonusAmount).toLocaleString('id-ID')}*\n` +
+        `• Saluran Media: *Bebas Digunakan untuk Seluruh Saluran MyAds*\n` +
+        (createdOrder.notes ? `• Catatan: ${createdOrder.notes}\n\n` : '\n') +
+        `💳 *PEMBAYARAN RESMI*\n` +
+        `• Total Transfer: *Rp ${createdOrder.totalPayment?.toLocaleString('id-ID')}*\n` +
+        `• Bank Tujuan: *${targetBank.bankName}*\n` +
+        `• No. Rekening: *${targetBank.accountNumber}*\n` +
+        `• Atas Nama: *${targetBank.accountHolder}*\n\n` +
+        `Bukti transfer pembayaran akan saya lampirkan di chat ini. Mohon verifikasi & pengisian saldo akun MyAds saya. Terima kasih!`
+      : `Halo Admin ${companyConfig.brandName}, saya telah melakukan pemesanan iklan melalui aplikasi:\n\n` +
+        `📋 *DETAIL PESANAN*\n` +
+        `• No. Order: *${createdOrder.id}*\n` +
+        `• Nama Pemesan: *${createdOrder.customerName}*\n` +
+        `• Nama Usaha/Brand: *${createdOrder.businessName || '-'}*\n` +
+        `• No. WhatsApp: *${createdOrder.whatsapp}*\n\n` +
+        `🎯 *KONFIGURASI KAMPANYE*\n` +
+        `• Paket Pilihan: *${createdOrder.selectedPackageName}*\n` +
+        `• Tipe Kampanye: *${createdOrder.campaignType}*\n` +
+        `• Saluran Media: *${createdOrder.channelName}*\n` +
+        `• Target Lokasi/Area: *${createdOrder.targetCityOrArea || 'Nasional'}*\n` +
+        (createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup
+          ? `\n🎯 *KAPABILITAS TARGETING*\n` +
+            `• Rentang Usia: *${createdOrder.targetAgeGroup || 'Semua Usia'}*\n` +
+            `• Segmentasi Religi: *${createdOrder.targetReligion || 'Semua Agama'}*\n` +
+            `• Jenis Kelamin: *${createdOrder.targetGender || 'Semua Gender'}*\n` +
+            `• ARPU Spending: *${createdOrder.targetArpuSpending || 'Semua ARPU'}*\n` +
+            `• Status SES: *${createdOrder.targetSes || 'Semua SES'}*\n` +
+            `• Device & OS: *${createdOrder.targetDeviceOs || 'Semua Device'}*\n` +
+            `• Status Pernikahan: *${createdOrder.targetMaritalStatus || 'Semua Status'}*\n` +
+            (createdOrder.targetInterests && createdOrder.targetInterests.length > 0
+              ? `• Minat & Perilaku: *${createdOrder.targetInterests.join(', ')}*\n`
+              : ''
+            ) + '\n'
+          : ''
+        ) +
+        (createdOrder.latitude && createdOrder.longitude
+          ? `• Titik GPS & Radius: *Lat: ${createdOrder.latitude}, Lng: ${createdOrder.longitude} (Radius: ${createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`})*\n` +
+            (createdOrder.streetAddress ? `• Alamat Jalan: *${createdOrder.streetAddress}*\n` : '')
+          : ''
+        ) +
+        (createdOrder.uploadedListFileName
+          ? `• File List Kontak: *${createdOrder.uploadedListFileName}* (${createdOrder.uploadedListFileSize || ''}${createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount} Nomor` : ''})\n`
+          : ''
+        ) +
+        (createdOrder.broadcastDate ? `• Tanggal Broadcast (H+3): *${createdOrder.broadcastDate}*\n` : '') +
+        (createdOrder.senderName ? `• Sender / Masking: *${createdOrder.senderName}*\n` : '') +
+        (createdOrder.adMessageContent ? `• Isi Pesan Iklan (160 char): *"${createdOrder.adMessageContent}"*\n` : '') +
+        (createdOrder.webLink ? `• Link Web/Promo: *${createdOrder.webLink}*\n` : '') +
+        `• Estimasi Jangkauan: *~${createdOrder.estimatedReach?.toLocaleString('id-ID')} Penerima*\n` +
+        (isOneKlik
+          ? `• Bonus Saldo: *Tidak Ada (Paket One Klik Terima Jadi)*\n`
+          : `• Bonus Saldo: *+${bonusPercent}%${bonusAmount > 0 ? ` (+Rp ${bonusAmount.toLocaleString('id-ID')})` : ''}*\n` +
+            (bonusAmount > 0 ? `• Total Saldo Masuk Akun: *Rp ${(effectiveTotalSubtotal + bonusAmount).toLocaleString('id-ID')}*\n` : '')
+        ) +
+        (createdOrder.notes ? `• Catatan Khusus: ${createdOrder.notes}\n\n` : '\n') +
+        `💳 *PEMBAYARAN RESMI*\n` +
+        `• Total Transfer: *Rp ${createdOrder.totalPayment?.toLocaleString('id-ID')}*\n` +
+        `• Bank Tujuan: *${targetBank.bankName}*\n` +
+        `• No. Rekening: *${targetBank.accountNumber}*\n` +
+        `• Atas Nama: *${targetBank.accountHolder}*\n\n` +
+        `Bukti transfer pembayaran akan saya lampirkan di chat ini. Mohon verifikasi & aktivasi jadwal kampanye iklan. Terima kasih!`;
 
     const waUrl = `https://wa.me/${companyConfig.waNumber}?text=${encodeURIComponent(waText)}`;
     window.open(waUrl, '_blank');
@@ -1811,17 +1840,17 @@ export const OrderModal: React.FC = () => {
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                       <span>Target Lokasi / Sasaran Area</span>
-                      {campaignType === 'LBA' ? (
+                      {!isTopupPackage && campaignType === 'LBA' ? (
                         <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
                           Wajib Titik GPS LBA
                         </span>
-                      ) : campaignType === 'TARGETED' ? (
+                      ) : !isTopupPackage && campaignType === 'TARGETED' ? (
                         <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-900/40 px-1.5 py-0.5 rounded">
                           Wilayah Administratif Nasional
                         </span>
                       ) : null}
                     </label>
-                    {campaignType === 'LBA' && (
+                    {!isTopupPackage && campaignType === 'LBA' && (
                       <button
                         type="button"
                         onClick={() => setIsMapModalOpen(true)}
@@ -1833,7 +1862,7 @@ export const OrderModal: React.FC = () => {
                     )}
                   </div>
 
-                  {campaignType === 'TARGETED' ? (
+                  {!isTopupPackage && campaignType === 'TARGETED' ? (
                     /* TARGETED: Pilih Provinsi, Kota, Kecamatan, Kelurahan (Data Wilayah Nasional) */
                     <div className="space-y-2 p-3 bg-rose-50/50 dark:bg-slate-850/60 rounded-xl border border-rose-200/80 dark:border-rose-900/40">
                       <div className="flex items-center justify-between">
@@ -1952,22 +1981,22 @@ export const OrderModal: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    /* LBA / BROADCAST / DEFAULT VIEW */
+                    /* LBA / BROADCAST / TOPUP / DEFAULT VIEW */
                     <div className="relative">
                       <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
-                        placeholder={campaignType === 'LBA' ? 'Klik untuk memilih titik GPS di Peta & radius...' : 'Contoh: Kota Surabaya, Jawa Timur, atau Seluruh Indonesia'}
+                        placeholder={!isTopupPackage && campaignType === 'LBA' ? 'Klik untuk memilih titik GPS di Peta & radius...' : 'Contoh: Kota Surabaya, Jawa Timur, atau Seluruh Indonesia'}
                         value={targetCityOrArea}
                         onClick={() => {
-                          if (campaignType === 'LBA' || !targetCityOrArea) {
+                          if (!isTopupPackage && (campaignType === 'LBA' || !targetCityOrArea)) {
                             setIsMapModalOpen(true);
                           }
                         }}
                         onChange={(e) => setTargetCityOrArea(e.target.value)}
-                        className={`w-full pl-9 ${campaignType === 'LBA' ? 'pr-24 cursor-pointer' : 'pr-3.5'} py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20`}
+                        className={`w-full pl-9 ${!isTopupPackage && campaignType === 'LBA' ? 'pr-24 cursor-pointer' : 'pr-3.5'} py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20`}
                       />
-                      {campaignType === 'LBA' && (
+                      {!isTopupPackage && campaignType === 'LBA' && (
                         <button
                           type="button"
                           onClick={() => setIsMapModalOpen(true)}
@@ -1982,8 +2011,31 @@ export const OrderModal: React.FC = () => {
                 </div>
               </div>
 
+              {/* Email Akun My ads (Khusus Pilihan Topup Saldo) */}
+              {isTopupPackage && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Email Akun My ads <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="Contoh: akun@bisnisanda.com"
+                      value={myAdsEmail}
+                      onChange={(e) => setMyAdsEmail(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                    Email akun Telkomsel MyAds tujuan untuk pengisian dan penambahan deposit saldo.
+                  </p>
+                </div>
+              )}
+
               {/* KAPABILITAS TARGETING KHUSUS (Tampil saat tipe kampanye TARGETED) */}
-              {campaignType === 'TARGETED' && (
+              {!isTopupPackage && campaignType === 'TARGETED' && (
                 <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-50/90 via-slate-50 to-red-50/40 dark:from-slate-850 dark:via-slate-850 dark:to-rose-950/20 border-2 border-rose-500/30 dark:border-rose-500/30 shadow-xs space-y-4">
                   {/* Header Objektif sesuai gambar referensi */}
                   <div className="border-b border-rose-200/80 dark:border-rose-900/40 pb-3">
@@ -2237,7 +2289,7 @@ export const OrderModal: React.FC = () => {
               )}
 
               {/* UPLOAD LIST NOMOR EXCEL / CSV (Tampil saat tipe kampanye BROADCAST) */}
-              {campaignType === 'BROADCAST' && (
+              {!isTopupPackage && campaignType === 'BROADCAST' && (
                 <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/90 via-slate-50 to-teal-50/40 dark:from-slate-850 dark:via-slate-850 dark:to-emerald-950/20 border-2 border-emerald-500/30 dark:border-emerald-500/30 shadow-xs space-y-3.5">
                   <div className="border-b border-emerald-200/80 dark:border-emerald-900/40 pb-2.5 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -2349,7 +2401,7 @@ export const OrderModal: React.FC = () => {
               )}
 
               {/* TAMPILAN AUTO-FILL GPS KETIKA SUDAH DIPILIH VIA PETA */}
-              {gpsLatitude !== undefined && gpsLongitude !== undefined && (
+              {!isTopupPackage && gpsLatitude !== undefined && gpsLongitude !== undefined && (
                 <div className="p-3.5 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800/90 border border-blue-200 dark:border-blue-800 shadow-xs space-y-2">
                   <div className="flex items-center justify-between border-b border-blue-100 dark:border-slate-700 pb-2">
                     <div className="flex items-center gap-2">
@@ -2401,117 +2453,119 @@ export const OrderModal: React.FC = () => {
               )}
 
               {/* PARAMETER BROADCAST TAMBAHAN (Tanggal H+3, Sender ID, Isi Pesan 160 Karakter, Link Web) */}
-              <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">
-                      Rincian Konten Siar & Jadwal Tayang
-                    </h5>
-                  </div>
-                  <span className="text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                    Sesuai Standar Telko
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Tanggal Broadcast (Bisa dipilih minimal H+3) */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Tanggal Siar Broadcast</span>
-                        <span className="text-rose-500">*</span>
-                      </span>
-                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                        Min. H+3
-                      </span>
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      min={minBroadcastDate}
-                      value={broadcastDate}
-                      onChange={(e) => setBroadcastDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 font-medium"
-                    />
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                      ℹ️ Jadwal siar tercepat: <strong>{minBroadcastDateFormatted}</strong> (Waktu moderasi operator & whitelist).
-                    </p>
-                  </div>
-
-                  {/* Nama Sender Pengirim */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Nama Sender / Masking Pengirim</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400">Maks. 11 Karakter</span>
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={11}
-                      placeholder="Contoh: TOKOBERKAH"
-                      value={senderName}
-                      onChange={(e) => setSenderName(e.target.value.replace(/[^a-zA-Z0-9\s_-]/g, ''))}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 font-mono uppercase tracking-wider"
-                    />
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                      Identitas pengirim yang muncul di HP penerima iklan.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Isi Pesan Siar Iklan (Maksimal 160 Karakter) */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span>Isi Pesan Siar Iklan</span>
-                      <span className="text-rose-500">*</span>
-                    </label>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      adMessageContent.length >= 150
-                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                    }`}>
-                      {adMessageContent.length} / 160 Karakter
+              {!isTopupPackage && (
+                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                        Rincian Konten Siar & Jadwal Tayang
+                      </h5>
+                    </div>
+                    <span className="text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      Sesuai Standar Telko
                     </span>
                   </div>
-                  <textarea
-                    rows={3}
-                    required
-                    maxLength={160}
-                    placeholder="Contoh: PROMO SPESIAL AKHIR PEKAN! Diskon s/d 50% di Toko Berkah. Tunjukkan SMS ini ke kasir untuk klaim hadiah. Info lengkap kunjungi bit.ly/promo..."
-                    value={adMessageContent}
-                    onChange={(e) => setAdMessageContent(e.target.value)}
-                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                  ></textarea>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    <span>💡 Pesan 1 SMS maksimal 160 karakter agar broadcast terkirim optimal & hemat kuota.</span>
-                    <span>Sisa: {160 - adMessageContent.length}</span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Tanggal Broadcast (Bisa dipilih minimal H+3) */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Tanggal Siar Broadcast</span>
+                          <span className="text-rose-500">*</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                          Min. H+3
+                        </span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        min={minBroadcastDate}
+                        value={broadcastDate}
+                        onChange={(e) => setBroadcastDate(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 font-medium"
+                      />
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                        ℹ️ Jadwal siar tercepat: <strong>{minBroadcastDateFormatted}</strong> (Waktu moderasi operator & whitelist).
+                      </p>
+                    </div>
+
+                    {/* Nama Sender Pengirim */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Nama Sender / Masking Pengirim</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400">Maks. 11 Karakter</span>
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={11}
+                        placeholder="Contoh: TOKOBERKAH"
+                        value={senderName}
+                        onChange={(e) => setSenderName(e.target.value.replace(/[^a-zA-Z0-9\s_-]/g, ''))}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 font-mono uppercase tracking-wider"
+                      />
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                        Identitas pengirim yang muncul di HP penerima iklan.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Isi Pesan Siar Iklan (Maksimal 160 Karakter) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Isi Pesan Siar Iklan</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        adMessageContent.length >= 150
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                      }`}>
+                        {adMessageContent.length} / 160 Karakter
+                      </span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      required
+                      maxLength={160}
+                      placeholder="Contoh: PROMO SPESIAL AKHIR PEKAN! Diskon s/d 50% di Toko Berkah. Tunjukkan SMS ini ke kasir untuk klaim hadiah. Info lengkap kunjungi bit.ly/promo..."
+                      value={adMessageContent}
+                      onChange={(e) => setAdMessageContent(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                    ></textarea>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      <span>💡 Pesan 1 SMS maksimal 160 karakter agar broadcast terkirim optimal & hemat kuota.</span>
+                      <span>Sisa: {160 - adMessageContent.length}</span>
+                    </div>
+                  </div>
+
+                  {/* Link Web / URL Promosi (Opsional) */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Kolom Link Web / URL Promosi (Opsional)</span>
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="Contoh: https://tokoberkah.com/promo atau bit.ly/promo-spesial"
+                      value={webLink}
+                      onChange={(e) => setWebLink(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                      Link website, landing page, atau nomor WhatsApp yang akan disertakan dalam kampanye.
+                    </p>
                   </div>
                 </div>
-
-                {/* Link Web / URL Promosi (Opsional) */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    <span>Kolom Link Web / URL Promosi (Opsional)</span>
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="Contoh: https://tokoberkah.com/promo atau bit.ly/promo-spesial"
-                    value={webLink}
-                    onChange={(e) => setWebLink(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                  />
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                    Link website, landing page, atau nomor WhatsApp yang akan disertakan dalam kampanye.
-                  </p>
-                </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -2615,140 +2669,202 @@ export const OrderModal: React.FC = () => {
               </div>
             </div>
 
-            {/* RINGKASAN KONFIGURASI KAMPANYE & LOKASI GPS */}
+            {/* RINGKASAN KONFIGURASI KAMPANYE & LOKASI GPS (Atau Akun My Ads jika Topup) */}
             <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
                 <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  <span>Konfigurasi Target & Materi Iklan</span>
+                  {createdOrder.campaignType === 'FLEXI TOP-UP' || createdOrder.myAdsEmail ? (
+                    <>
+                      <Mail className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Rincian Akun & Data Pemesan Top-Up</span>
+                    </>
+                  ) : (
+                    <>
+                      <Target className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Konfigurasi Target & Materi Iklan</span>
+                    </>
+                  )}
                 </span>
                 <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
                   {createdOrder.campaignType}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 block">Sasaran Lokasi / Area:</span>
-                  <strong className="text-slate-800 dark:text-slate-200">{createdOrder.targetCityOrArea || 'Nasional'}</strong>
-                </div>
-
-                {createdOrder.broadcastDate && (
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400 block">Jadwal Tanggal Siar (H+3):</span>
-                    <strong className="text-blue-600 dark:text-blue-400">{createdOrder.broadcastDate}</strong>
-                  </div>
-                )}
-
-                {createdOrder.senderName && (
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400 block">Nama Sender / Masking:</span>
-                    <strong className="text-slate-800 dark:text-slate-200 font-mono uppercase">{createdOrder.senderName}</strong>
-                  </div>
-                )}
-
-                {createdOrder.webLink && (
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400 block">Link Web / Landing Page:</span>
-                    <span className="text-blue-600 dark:text-blue-400 underline truncate block">{createdOrder.webLink}</span>
-                  </div>
-                )}
-
-                {createdOrder.uploadedListFileName && (
-                  <div className="sm:col-span-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              {createdOrder.campaignType === 'FLEXI TOP-UP' || createdOrder.myAdsEmail ? (
+                /* Tampilan Rincian Data Pesanan Khusus Top-Up */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  {createdOrder.myAdsEmail && (
+                    <div className="sm:col-span-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block">
-                          File List Kontak Diupload:
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold block uppercase tracking-wider">
+                          Email Akun My ads Tujuan:
                         </span>
-                        <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">
-                          {createdOrder.uploadedListFileName} ({createdOrder.uploadedListFileSize || ''}{createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount.toLocaleString('id-ID')} Kontak` : ''})
-                        </span>
+                        <strong className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                          {createdOrder.myAdsEmail}
+                        </strong>
                       </div>
+                      <span className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                        Target Top-Up
+                      </span>
                     </div>
-                    <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
-                      Terlampir
-                    </span>
-                  </div>
-                )}
-              </div>
+                  )}
 
-              {(createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup) && (
-                <div className="p-2.5 rounded-lg bg-rose-50/80 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 text-[11px] space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1">
-                      <Target className="w-3.5 h-3.5" />
-                      <span>Kapabilitas Targeting yang Diaktifkan:</span>
-                    </span>
-                    <span className="text-[10px] font-semibold bg-rose-200/70 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 px-1.5 py-0.2 rounded">
-                      8 Parameter
-                    </span>
+                  <div>
+                    <span className="text-slate-500 dark:text-slate-400 block">Nama Pemesan:</span>
+                    <strong className="text-slate-800 dark:text-slate-200">{createdOrder.customerName}</strong>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Grup Usia:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetAgeGroup || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Religi:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetReligion || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Gender:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetGender || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">ARPU Spending:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetArpuSpending || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Status SES:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetSes || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Device & OS:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetDeviceOs || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Pernikahan:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetMaritalStatus || 'Semua'}</strong>
-                    </div>
-                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
-                      <span className="text-slate-400 block">Minat/Perilaku:</span>
-                      <strong className="text-slate-800 dark:text-slate-200 truncate block" title={createdOrder.targetInterests?.join(', ') || 'Semua'}>
-                        {createdOrder.targetInterests && createdOrder.targetInterests.length > 0 ? `${createdOrder.targetInterests.length} Minat` : 'Semua'}
-                      </strong>
-                    </div>
+
+                  <div>
+                    <span className="text-slate-500 dark:text-slate-400 block">Nomor WhatsApp:</span>
+                    <strong className="text-slate-800 dark:text-slate-200 font-mono">{createdOrder.whatsapp}</strong>
                   </div>
+
+                  {createdOrder.businessName && (
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400 block">Nama Usaha / Brand:</span>
+                      <strong className="text-slate-800 dark:text-slate-200">{createdOrder.businessName}</strong>
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-slate-500 dark:text-slate-400 block">Sasaran Kota / Wilayah:</span>
+                    <strong className="text-slate-800 dark:text-slate-200">{createdOrder.targetCityOrArea || 'Nasional'}</strong>
+                  </div>
+
+                  {createdOrder.notes && (
+                    <div className="sm:col-span-2 p-2 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Catatan Pemesan:</span>
+                      <p className="text-slate-700 dark:text-slate-300 italic">"{createdOrder.notes}"</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : (
+                /* Tampilan Rincian Kampanye LBA / BROADCAST / TARGETED */
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400 block">Sasaran Lokasi / Area:</span>
+                      <strong className="text-slate-800 dark:text-slate-200">{createdOrder.targetCityOrArea || 'Nasional'}</strong>
+                    </div>
 
-              {createdOrder.latitude && createdOrder.longitude && (
-                <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-[11px]">
-                  <span className="font-bold text-blue-700 dark:text-blue-300 block mb-0.5">
-                    📍 Titik Koordinat GPS & Radius:
-                  </span>
-                  <div className="text-slate-700 dark:text-slate-300">
-                    Lat: {createdOrder.latitude}, Lng: {createdOrder.longitude} • Radius: {createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`}
-                    {createdOrder.streetAddress && (
-                      <div className="mt-0.5 text-slate-600 dark:text-slate-400">
-                        Alamat: {createdOrder.streetAddress}
+                    {createdOrder.broadcastDate && (
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block">Jadwal Tanggal Siar (H+3):</span>
+                        <strong className="text-blue-600 dark:text-blue-400">{createdOrder.broadcastDate}</strong>
+                      </div>
+                    )}
+
+                    {createdOrder.senderName && (
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block">Nama Sender / Masking:</span>
+                        <strong className="text-slate-800 dark:text-slate-200 font-mono uppercase">{createdOrder.senderName}</strong>
+                      </div>
+                    )}
+
+                    {createdOrder.webLink && (
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block">Link Web / Landing Page:</span>
+                        <span className="text-blue-600 dark:text-blue-400 underline truncate block">{createdOrder.webLink}</span>
+                      </div>
+                    )}
+
+                    {createdOrder.uploadedListFileName && (
+                      <div className="sm:col-span-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div>
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block">
+                              File List Kontak Diupload:
+                            </span>
+                            <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+                              {createdOrder.uploadedListFileName} ({createdOrder.uploadedListFileSize || ''}{createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount.toLocaleString('id-ID')} Kontak` : ''})
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                          Terlampir
+                        </span>
                       </div>
                     )}
                   </div>
-                </div>
-              )}
 
-              {createdOrder.adMessageContent && (
-                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-[11px]">
-                  <span className="font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
-                    💬 Isi Pesan Siar ({createdOrder.adMessageContent.length} Karakter):
-                  </span>
-                  <p className="text-slate-800 dark:text-slate-200 italic">
-                    "{createdOrder.adMessageContent}"
-                  </p>
-                </div>
+                  {(createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup) && (
+                    <div className="p-2.5 rounded-lg bg-rose-50/80 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 text-[11px] space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                          <Target className="w-3.5 h-3.5" />
+                          <span>Kapabilitas Targeting yang Diaktifkan:</span>
+                        </span>
+                        <span className="text-[10px] font-semibold bg-rose-200/70 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 px-1.5 py-0.2 rounded">
+                          8 Parameter
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Grup Usia:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetAgeGroup || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Religi:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetReligion || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Gender:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetGender || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">ARPU Spending:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetArpuSpending || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Status SES:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetSes || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Device & OS:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetDeviceOs || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Pernikahan:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetMaritalStatus || 'Semua'}</strong>
+                        </div>
+                        <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                          <span className="text-slate-400 block">Minat/Perilaku:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 truncate block" title={createdOrder.targetInterests?.join(', ') || 'Semua'}>
+                            {createdOrder.targetInterests && createdOrder.targetInterests.length > 0 ? `${createdOrder.targetInterests.length} Minat` : 'Semua'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {createdOrder.latitude && createdOrder.longitude && (
+                    <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-[11px]">
+                      <span className="font-bold text-blue-700 dark:text-blue-300 block mb-0.5">
+                        📍 Titik Koordinat GPS & Radius:
+                      </span>
+                      <div className="text-slate-700 dark:text-slate-300">
+                        Lat: {createdOrder.latitude}, Lng: {createdOrder.longitude} • Radius: {createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`}
+                        {createdOrder.streetAddress && (
+                          <div className="mt-0.5 text-slate-600 dark:text-slate-400">
+                            Alamat: {createdOrder.streetAddress}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {createdOrder.adMessageContent && (
+                    <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-[11px]">
+                      <span className="font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
+                        💬 Isi Pesan Siar ({createdOrder.adMessageContent.length} Karakter):
+                      </span>
+                      <p className="text-slate-800 dark:text-slate-200 italic">
+                        "{createdOrder.adMessageContent}"
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
