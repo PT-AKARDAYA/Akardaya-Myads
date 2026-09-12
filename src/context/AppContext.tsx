@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfig, Testimonial, OrderLead, OfficeLocation, WebSocketMessage } from '../types';
+import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfig, Testimonial, OrderLead, OfficeLocation } from '../types';
 import { INITIAL_APP_DATA, DEFAULT_OFFICE_LOCATIONS, DEFAULT_PACKAGES, DEFAULT_CHANNEL_RATES, DEFAULT_TESTIMONIALS } from '../data/defaultData';
 
 export const PERMANENT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec';
@@ -321,9 +321,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   });
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   const showToast = useCallback((message: string, rawType: string = 'info') => {
     const lower = rawType.toLowerCase();
     const type: 'info' | 'success' | 'warning' =
@@ -370,8 +367,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const lastSyncTimestampRef = useRef<string>('');
   const isSyncingRef = useRef<boolean>(false);
 
-  // Background fetcher from Google Spreadsheet or Server
-  // Supports silent background updates, or forced manual syncs
+  // Fast direct fetcher from Google Apps Script Web App
   const syncLatestData = useCallback(async (silent = true, force = false) => {
     // If background sync is paused and not forced, do nothing
     if (silent && (isSyncPausedRef.current || isOrderModalOpenRef.current) && !force) {
@@ -382,42 +378,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isSyncingRef.current = true;
 
     try {
-      // 1. First attempt full-stack sync via server bridge (Node.js fetch to GAS, avoids CORS limitations)
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const sRes = await fetch(`/api/sync-gsheet?_t=${Date.now()}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (sRes.ok) {
-          const sJson = await sRes.json();
-          if (sJson && sJson.data && sJson.data.packages) {
-            const remoteData = safeNormalizeData(sJson.data);
-            const currentStr = JSON.stringify(dataRef.current);
-            const remoteStr = JSON.stringify(remoteData);
-
-            if (currentStr !== remoteStr) {
-              lastSyncTimestampRef.current = remoteData.lastUpdated || '';
-              dataRef.current = remoteData;
-              setData(remoteData);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('akardaya_app_data', remoteStr);
-              }
-              if (!silent) {
-                showToast('✨ Seluruh menu admin berhasil disinkronkan dari Google Sheets', 'success');
-              }
-            } else if (!silent) {
-              showToast('✨ Data semua menu sudah sinkron dengan Google Spreadsheet', 'info');
-            }
-            setIsLoading(false);
-            isSyncingRef.current = false;
-            return;
-          }
-        }
-      } catch (srvErr) {
-        // Fallback to direct client fetch
-      }
-
-      // 2. Direct browser fetch to Google Spreadsheet Web App
       const currentData = dataRef.current;
       const savedStorageUrl = typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null;
       const spreadsheetUrl = currentData?.companyConfig?.spreadsheetUrl || savedStorageUrl || PERMANENT_GAS_URL;
@@ -429,12 +389,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             : `${spreadsheetUrl}?action=GET_DATA&_t=${Date.now()}`;
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const sheetRes = await fetch(fetchUrl, { signal: controller.signal });
+          const timeoutId = setTimeout(() => controller.abort(), 7000);
+          const sheetRes = await fetch(fetchUrl, {
+            signal: controller.signal,
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+          });
           clearTimeout(timeoutId);
+
           if (sheetRes.ok) {
             const sheetJson = await sheetRes.json();
-            if (sheetJson && sheetJson.status === 'success' && sheetJson.data && sheetJson.data.packages) {
+            if (sheetJson && (sheetJson.status === 'success' || sheetJson.data) && sheetJson.data?.packages) {
               const remoteData = safeNormalizeData(sheetJson.data);
               const currentStr = JSON.stringify(dataRef.current);
               const remoteStr = JSON.stringify(remoteData);
@@ -445,7 +410,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 if (remoteOrders.length > currentOrders.length && !silent) {
                   showToast(`🛒 ${remoteOrders.length - currentOrders.length} Pesanan baru terdeteksi dari Google Sheet!`, 'success');
                 } else if (!silent) {
-                  showToast('✨ Data terbaru dari Google Spreadsheet berhasil dimuat', 'info');
+                  showToast('✨ Data terbaru dari Google Spreadsheet berhasil dimuat', 'success');
                 }
                 
                 lastSyncTimestampRef.current = remoteData.lastUpdated || '';
@@ -453,7 +418,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setData(remoteData);
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('akardaya_app_data', remoteStr);
+                  try {
+                    if (broadcastChannelRef.current) {
+                      broadcastChannelRef.current.postMessage({
+                        type: 'DATA_UPDATED',
+                        payload: remoteData,
+                      });
+                    }
+                  } catch (e) {}
                 }
+              } else if (!silent) {
+                showToast('✨ Data sudah sesuai dengan versi terbaru di Google Spreadsheet', 'info');
               }
               setIsLoading(false);
               isSyncingRef.current = false;
@@ -461,35 +436,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
         } catch (sheetErr) {
-          // Spreadsheet request silent failover
-        }
-      }
-
-      // 2. Server API fallback for fullstack mode
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-        const res = await fetch(`/api/data?_t=${Date.now()}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const json = await res.json();
-          if (json && json.packages) {
-            const remoteData = safeNormalizeData(json);
-            const currentStr = JSON.stringify(dataRef.current);
-            const remoteStr = JSON.stringify(remoteData);
-            
-            if (currentStr !== remoteStr) {
-              lastSyncTimestampRef.current = remoteData.lastUpdated || '';
-              dataRef.current = remoteData;
-              setData(remoteData);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('akardaya_app_data', remoteStr);
-              }
-            }
+          if (!silent) {
+            console.warn('Google Sheets direct sync notice:', sheetErr);
           }
         }
-      } catch (err) {
-        // Standalone/static mode
       }
     } finally {
       setIsLoading(false);
@@ -497,9 +447,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [showToast]);
 
-  // Fetch initial data via REST fallback and localStorage
-  const fetchInitialData = useCallback(async () => {
-    // 1. Try loading from localStorage first (for instant first paint)
+  // Fetch initial data via localStorage
+  const fetchInitialData = useCallback(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('akardaya_app_data');
@@ -518,93 +467,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Error loading localStorage data:', e);
       }
     }
-
-    // 2. Fetch fresh data in background immediately
-    await syncLatestData(true);
-  }, [syncLatestData]);
-
-  // Initialize WebSocket connection or Fallback to Static Online Mode
-  const connectWebSocket = useCallback(() => {
-    if (typeof window === 'undefined') return;
-
-    // Initialize default active users count
-    try {
-      setActiveUsers(1);
-    } catch (e) {
-      setActiveUsers(1);
-    }
-
-    const isStaticHost = window.location.hostname.includes('github.io');
-    if (isStaticHost) {
-      setIsConnected(true);
-      return;
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setIsConnected(true);
-        console.log('⚡ Connected to real-time sync server');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg: WebSocketMessage = JSON.parse(event.data);
-          if (msg.type === 'INIT_DATA' || msg.type === 'SYNC_DATA') {
-            if (isSyncPausedRef.current || isOrderModalOpenRef.current) return;
-            const normalized = safeNormalizeData(msg.payload);
-            const currentStr = JSON.stringify(dataRef.current);
-            const nextStr = JSON.stringify(normalized);
-            if (currentStr !== nextStr) {
-              lastSyncTimestampRef.current = normalized.lastUpdated || '';
-              dataRef.current = normalized;
-              setData(normalized);
-              localStorage.setItem('akardaya_app_data', nextStr);
-              if (msg.type === 'SYNC_DATA') {
-                showToast('✨ Data disinkronkan secara real-time dari server', 'info');
-              }
-            }
-            setIsLoading(false);
-          } else if (msg.type === 'ACTIVE_USERS') {
-            setActiveUsers(msg.payload?.count || 1);
-          } else if (msg.type === 'NEW_REVIEW') {
-            showToast(`⭐ Ulasan baru dari ${msg.payload?.name || 'Pelanggan'}!`, 'success');
-          } else if (msg.type === 'NEW_ORDER' && msg.payload) {
-            const newOrder: OrderLead = msg.payload;
-            setData((prev) => {
-              const currentOrders = prev.orders || [];
-              if (currentOrders.some((o) => o.id === newOrder.id)) return prev;
-              const nextOrders = [newOrder, ...currentOrders];
-              const nextData = safeNormalizeData({ ...prev, orders: nextOrders, lastUpdated: new Date().toISOString() });
-              dataRef.current = nextData;
-              localStorage.setItem('akardaya_app_data', JSON.stringify(nextData));
-              return nextData;
-            });
-            showToast(`🛒 Pesanan baru masuk dari ${newOrder.customerName || 'Klien'}!`, 'success');
-          }
-        } catch (err) {
-          console.error('Error handling WS message:', err);
-        }
-      };
-
-      ws.onclose = () => {
-        setIsConnected(true);
-      };
-
-      ws.onerror = () => {
-        console.log('WebSocket server not available, switching to Standalone Mode.');
-        setIsConnected(true);
-      };
-    } catch (err) {
-      console.log('Using Standalone Mode.');
-      setIsConnected(true);
-    }
-  }, [showToast]);
+  }, []);
 
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const syncLatestDataRef = useRef(syncLatestData);
@@ -613,19 +476,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchInitialDataRef = useRef(fetchInitialData);
   fetchInitialDataRef.current = fetchInitialData;
 
-  const connectWebSocketRef = useRef(connectWebSocket);
-  connectWebSocketRef.current = connectWebSocket;
-
   useEffect(() => {
-    // 1. Instant startup: connect real-time websocket and fast local cache
+    // 1. Instant startup: load fast local cache
     fetchInitialDataRef.current();
-    connectWebSocketRef.current();
 
-    // 2. Immediate silent background sync (300ms) after app open with Google Sheets & Server
+    // 2. Immediate silent background sync directly with Google Sheets (100ms)
     const backgroundSyncTimer = setTimeout(() => {
-      console.log('🔄 [Background Sync] Memulai sinkronisasi data otomatis di belakang layar setelah aplikasi dibuka...');
       syncLatestDataRef.current(true, true);
-    }, 300);
+    }, 100);
 
     // 3. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
     try {
@@ -634,7 +492,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         broadcastChannelRef.current = bc;
 
         bc.onmessage = (event) => {
-          if (isOrderModalOpenRef.current) return; // Jeda saat form aktif
+          if (isOrderModalOpenRef.current) return;
 
           if (event.data && event.data.type === 'DATA_UPDATED' && event.data.payload) {
             const updated = safeNormalizeData(event.data.payload);
@@ -662,9 +520,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('BroadcastChannel not supported:', e);
     }
 
-    // 2. Storage event listener fallback for browsers/tabs
+    // 4. Storage event listener fallback for browsers/tabs
     const handleStorageChange = (e: StorageEvent) => {
-      if (isOrderModalOpenRef.current) return; // Jeda saat form aktif
+      if (isOrderModalOpenRef.current) return;
       if (e.key === 'akardaya_app_data' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
@@ -682,7 +540,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // 3. Auto sync when user returns / focuses the browser tab
+    // 5. Auto sync when user returns / focuses the browser tab
     const handleFocus = () => {
       if (!isSyncPausedRef.current && !isOrderModalOpenRef.current) {
         syncLatestDataRef.current(true);
@@ -696,7 +554,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 4. Background polling timer (Every 20 seconds) to fetch database/spreadsheet updates across all users
+    // 6. Periodic Background polling to Google Sheets (Every 20 seconds)
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isOrderModalOpenRef.current) {
         syncLatestDataRef.current(true);
@@ -705,12 +563,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       clearTimeout(backgroundSyncTimer);
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
       if (broadcastChannelRef.current) {
         broadcastChannelRef.current.close();
       }
@@ -723,7 +575,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Update AppData (Admin)
   const updateAppData = async (newData: Partial<AppData>): Promise<boolean> => {
-    // 1. Always update local state and localStorage
+    // 1. Always update local state and localStorage instantly (0ms)
     const merged = safeNormalizeData({ 
       ...data, 
       ...newData,
@@ -752,22 +604,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // Also send via WebSocket if connected
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'UPDATE_DATA',
-          payload: merged,
-        }));
-      } catch (e) {
-        console.warn('WS send error:', e);
-      }
-    }
-
     let syncedToGoogleSheet = false;
 
-    // 2. Sync to Google Spreadsheet if configured
-    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    // 2. Sync to Google Spreadsheet Web App directly
+    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null) || PERMANENT_GAS_URL;
     if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
       try {
         await fetch(spreadsheetUrl, {
@@ -784,29 +624,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Error syncing to Google Apps Script:', sheetErr);
       }
     }
-
-    // 3. Try updating server if running full-stack
-    try {
-      const res = await fetch('/api/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(merged),
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data) {
-          setData(json.data);
-          showToast('✅ Perubahan berhasil disimpan & disinkronkan ke server!', 'success');
-          return true;
-        }
-      }
-    } catch (err) {
-      // Static mode fallback
-    }
     
     if (syncedToGoogleSheet) {
-      showToast('✅ Perubahan berhasil disimpan ke Google Spreadsheet & otomatis terupdate ke pengguna!', 'success');
+      showToast('✅ Perubahan berhasil disimpan ke Google Spreadsheet & otomatis terupdate!', 'success');
     } else {
       showToast('✅ Perubahan berhasil disimpan & langsung aktif!', 'success');
     }
@@ -831,8 +651,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('akardaya_app_data', JSON.stringify(merged));
     }
 
-    // Sync to Google Spreadsheet
-    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null);
+    // Direct sync to Google Spreadsheet
+    const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null) || PERMANENT_GAS_URL;
     if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
       try {
         await fetch(spreadsheetUrl, {
@@ -847,16 +667,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (err) {
         console.log('Google sheet review error:', err);
       }
-    }
-
-    try {
-      await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(review),
-      });
-    } catch (err) {
-      // Ignore static network errors
     }
 
     showToast('🎉 Terima kasih! Ulasan Anda berhasil diterbitkan.', 'success');
@@ -902,19 +712,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 2. Send via WebSocket if connected
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'UPDATE_DATA',
-          payload: merged,
-        }));
-      } catch (e) {
-        console.warn('WS send error:', e);
-      }
-    }
-
-    // 3. Sync lead to Google Spreadsheet (PESANAN_LEADS sheet)
+    // 2. Direct sync lead to Google Spreadsheet (PESANAN_LEADS sheet)
     const spreadsheetUrl = merged.companyConfig?.spreadsheetUrl || (typeof window !== 'undefined' ? localStorage.getItem('akardaya_spreadsheet_url') : null) || PERMANENT_GAS_URL;
     if (spreadsheetUrl && spreadsheetUrl.startsWith('https://script.google.com/')) {
       try {
@@ -974,17 +772,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 4. Send to server API if available
-    try {
-      await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOrder),
-      });
-    } catch (err) {
-      // Ignore static network errors
-    }
-
     showToast('🚀 Pesanan berhasil dibuat! Silakan selesaikan pembayaran.', 'success');
     return newOrder;
   };
@@ -994,12 +781,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setData(INITIAL_APP_DATA);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('akardaya_app_data');
-    }
-
-    try {
-      await fetch('/api/admin/reset', { method: 'POST' });
-    } catch (err) {
-      // Static mode
     }
 
     showToast('🔄 Data berhasil direset ke format default!', 'info');

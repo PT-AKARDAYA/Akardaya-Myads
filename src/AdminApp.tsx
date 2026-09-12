@@ -3,6 +3,8 @@ import { useApp } from './context/AppContext';
 import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation, BankAccount } from './types';
 import { AkarDayaLogo } from './components/AkarDayaLogo';
 import { VisitorAnalyticsDashboard } from './components/VisitorAnalyticsDashboard';
+import { OrderInvoiceModal } from './components/OrderInvoiceModal';
+import { PaymentProofModal } from './components/PaymentProofModal';
 import {
   ShieldCheck,
   Layers,
@@ -46,6 +48,8 @@ import {
   Play,
   CreditCard,
   Star,
+  FileText,
+  Eye,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -91,6 +95,102 @@ export const AdminApp: React.FC = () => {
     isPrimary: false,
     isActive: true,
   });
+
+  // Invoice & Payment Proof Modal States
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<OrderLead | null>(null);
+  const [selectedProofOrder, setSelectedProofOrder] = useState<OrderLead | null>(null);
+
+  // Handle upload payment proof with client-side image compression
+  const handleUploadProofForOrder = (orderId: string, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showToast('File harus berupa gambar (JPG/PNG/WEBP)', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1400;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > maxDim) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          }
+        } else {
+          if (h > maxDim) {
+            h = Math.round((h * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          handleUpdateOrderPaymentProof(orderId, dataUrl, file.name);
+        }
+      };
+      img.onerror = () => {
+        showToast('Gagal memproses file gambar bukti transfer', 'error');
+      };
+    };
+  };
+
+  const handleUpdateOrderPaymentProof = (orderId: string, proofUrl: string | undefined, fileName?: string) => {
+    const nowStr = new Date().toLocaleString('id-ID');
+    setDraftData((prev) => {
+      const updatedOrders = (prev.orders || []).map((o) => {
+        if (o.id === orderId) {
+          return {
+            ...o,
+            paymentProofUrl: proofUrl,
+            paymentProofFileName: fileName || (proofUrl ? 'Bukti_Transfer.jpg' : undefined),
+            paymentProofUploadedAt: proofUrl ? nowStr : undefined,
+          };
+        }
+        return o;
+      });
+      return { ...prev, orders: updatedOrders };
+    });
+
+    if (selectedProofOrder && selectedProofOrder.id === orderId) {
+      setSelectedProofOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              paymentProofUrl: proofUrl,
+              paymentProofFileName: fileName || (proofUrl ? 'Bukti_Transfer.jpg' : undefined),
+              paymentProofUploadedAt: proofUrl ? nowStr : undefined,
+            }
+          : null
+      );
+    }
+
+    if (selectedInvoiceOrder && selectedInvoiceOrder.id === orderId) {
+      setSelectedInvoiceOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              paymentProofUrl: proofUrl,
+              paymentProofFileName: fileName || (proofUrl ? 'Bukti_Transfer.jpg' : undefined),
+              paymentProofUploadedAt: proofUrl ? nowStr : undefined,
+            }
+          : null
+      );
+    }
+
+    if (proofUrl) {
+      showToast('✅ Bukti transfer berhasil diperbarui & disimpan', 'success');
+    } else {
+      showToast('🗑️ Bukti transfer berhasil dihapus', 'info');
+    }
+  };
 
   // Check if draft has unsaved changes
   const isDirty = React.useMemo(() => {
@@ -2682,7 +2782,7 @@ export const AdminApp: React.FC = () => {
                           <select
                             value={order.status}
                             onChange={(e: any) => handleUpdateLeadStatus(order.id, e.target.value)}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border-none ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border-none cursor-pointer ${
                               order.status === 'COMPLETED'
                                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                                 : order.status === 'CONTACTED'
@@ -2697,37 +2797,206 @@ export const AdminApp: React.FC = () => {
                         </div>
 
                         <p className="text-slate-600 dark:text-slate-300">
-                          📦 Paket:{' '}
-                          <strong className="text-slate-900 dark:text-white">
-                            {order.selectedPackageName}
-                          </strong>{' '}
-                          | Budget: {order.estimatedBudget}
+                          📦 Paket: <strong className="text-slate-900 dark:text-white">{order.selectedPackageName}</strong> | Budget: {order.estimatedBudget} • <span className="font-semibold text-blue-600 dark:text-blue-400">{order.campaignType || 'BROADCAST'}</span>
                         </p>
                         {order.targetCityOrArea && (
                           <p className="text-slate-500">📍 Area: {order.targetCityOrArea}</p>
                         )}
-                        {order.notes && (
-                          <p className="text-slate-500 italic">📝 "{order.notes}"</p>
+                        {order.myAdsEmail && (
+                          <p className="text-blue-600 dark:text-blue-400 font-semibold text-[11px] bg-blue-50 dark:bg-blue-950/40 p-1.5 rounded border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                            ✉️ Email Akun MyAds: <strong>{order.myAdsEmail}</strong>
+                          </p>
                         )}
-                        <p className="text-[10px] text-slate-400">
-                          Waktu: {new Date(order.createdAt).toLocaleString('id-ID')}
+                        {(order.latitude !== undefined && order.longitude !== undefined) && (
+                          <p className="text-blue-600 dark:text-blue-400 font-mono text-[11px]">
+                            🗺️ GPS: Lat {order.latitude}, Lng {order.longitude} (Radius {order.radiusMeters >= 1000 ? `${(order.radiusMeters / 1000).toFixed(1)} km` : `${order.radiusMeters} m`})
+                            {order.streetAddress && ` • ${order.streetAddress}`}
+                          </p>
+                        )}
+                        {order.uploadedListFileName && (
+                          <p className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] bg-emerald-50 dark:bg-emerald-950/40 p-1.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                            📊 File Kontak: <strong>{order.uploadedListFileName}</strong> ({order.uploadedListFileSize || ''}{order.uploadedListFileCount ? ` • ~${order.uploadedListFileCount} Nomor` : ''})
+                          </p>
+                        )}
+                        {order.broadcastDate && (
+                          <p className="text-slate-600 dark:text-slate-300 text-[11px]">
+                            📅 Tanggal Siar: <strong>{order.broadcastDate}</strong> {order.senderName && `• Sender: ${order.senderName}`}
+                          </p>
+                        )}
+                        {(order.campaignType === 'TARGETED' || order.targetAgeGroup) && (
+                          <div className="mt-1 p-2 rounded-lg bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 text-[10px] space-y-0.5">
+                            <span className="font-bold text-rose-700 dark:text-rose-400 block">🎯 Filter Targeting:</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-slate-700 dark:text-slate-300">
+                              <span>• Usia: {order.targetAgeGroup || 'Semua'}</span>
+                              <span>• Religi: {order.targetReligion || 'Semua'}</span>
+                              <span>• Gender: {order.targetGender || 'Semua'}</span>
+                              <span>• ARPU: {order.targetArpuSpending || 'Semua'}</span>
+                              <span>• SES: {order.targetSes || 'Semua'}</span>
+                              <span>• Device: {order.targetDeviceOs || 'Semua'}</span>
+                              <span>• Status: {order.targetMaritalStatus || 'Semua'}</span>
+                              <span className="truncate" title={order.targetInterests?.join(', ') || 'Semua'}>
+                                • Minat: {order.targetInterests && order.targetInterests.length > 0 ? `${order.targetInterests.length} Minat` : 'Semua'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {order.adMessageContent && (
+                          <p className="text-slate-600 dark:text-slate-300 italic text-[11px] bg-slate-50 dark:bg-slate-800/80 p-1.5 rounded border border-slate-200/70 dark:border-slate-700">
+                            💬 "{order.adMessageContent}"
+                            {order.webLink && <span className="block not-italic text-blue-500 underline mt-0.5">Link: {order.webLink}</span>}
+                          </p>
+                        )}
+                        {order.notes && <p className="text-slate-500 italic">📝 "{order.notes}"</p>}
+                        
+                        {/* BUKTI UPLOAD TRANSFER PEMBAYARAN */}
+                        <div className="mt-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {order.paymentProofUrl ? (
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {/* Thumbnail Preview */}
+                                  <div
+                                    onClick={() => setSelectedProofOrder(order)}
+                                    className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-emerald-500/40 dark:border-emerald-500/30 shrink-0 cursor-pointer group shadow-2xs bg-slate-900"
+                                    title="Klik untuk melihat bukti transfer ukuran penuh"
+                                  >
+                                    <img
+                                      src={order.paymentProofUrl}
+                                      alt="Bukti Transfer"
+                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                      <Eye className="w-4 h-4" />
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        <span>Bukti Transfer Terlampir</span>
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[240px]">
+                                      {order.paymentProofFileName || 'Struk_Transfer.jpg'} • {order.paymentProofUploadedAt || 'Telah Diunggah'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                    <CreditCard className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 block">
+                                      Belum Ada Bukti Transfer
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 block">
+                                      Unggah struk atau screenshot bukti transfer dari WA/klien
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Actions for Payment Proof */}
+                            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                              {order.paymentProofUrl ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedProofOrder(order)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer transition-all active:scale-95"
+                                    title="Lihat Gambar Bukti Transfer Ukuran Penuh"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Lihat Bukti</span>
+                                  </button>
+
+                                  <label
+                                    className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                                    title="Ganti Bukti Transfer dengan file baru"
+                                  >
+                                    <Upload className="w-3 h-3 text-blue-500" />
+                                    <span>Ganti</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleUploadProofForOrder(order.id, file);
+                                      }}
+                                    />
+                                  </label>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`Hapus bukti transfer untuk pesanan ${order.id}?`)) {
+                                        handleUpdateOrderPaymentProof(order.id, undefined);
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                    title="Hapus Bukti Transfer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              ) : (
+                                <label
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-95"
+                                  title="Upload file foto / screenshot bukti transfer pembayaran"
+                                >
+                                  <Upload className="w-3.5 h-3.5" />
+                                  <span>Upload Bukti Transfer</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleUploadProofForOrder(order.id, file);
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          Waktu: {(() => {
+                            if (!order.createdAt) return '-';
+                            const d = new Date(order.createdAt);
+                            return isNaN(d.getTime()) ? String(order.createdAt) : d.toLocaleString('id-ID');
+                          })()}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedInvoiceOrder(order)}
+                          className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold text-xs flex items-center gap-1.5 border border-blue-200 dark:border-blue-800 transition-all shadow-2xs active:scale-95 cursor-pointer"
+                          title="Lihat Invoice & Cetak PDF / Kirim WhatsApp"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Invoice</span>
+                        </button>
+
                         <a
                           href={`https://wa.me/${order.whatsapp}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-colors"
                         >
                           <Phone className="w-3.5 h-3.5" />
-                          <span>Chat WA ({order.whatsapp})</span>
+                          <span>Hubungi WA</span>
                         </a>
 
                         <button
                           onClick={() => handleDeleteLead(order.id)}
-                          className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
                           title="Hapus Lead"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -2741,6 +3010,22 @@ export const AdminApp: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Invoice Modal for Selected Order */}
+      <OrderInvoiceModal
+        order={selectedInvoiceOrder}
+        isOpen={Boolean(selectedInvoiceOrder)}
+        onClose={() => setSelectedInvoiceOrder(null)}
+        companyConfig={draftData.companyConfig}
+      />
+
+      {/* Payment Proof Lightbox Modal */}
+      <PaymentProofModal
+        order={selectedProofOrder}
+        isOpen={Boolean(selectedProofOrder)}
+        onClose={() => setSelectedProofOrder(null)}
+        onUpdatePaymentProof={handleUpdateOrderPaymentProof}
+      />
     </div>
   );
 };
