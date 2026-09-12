@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { SubscriptionPackage } from '../types';
 import {
   Check,
   Table as TableIcon,
@@ -18,359 +19,367 @@ import {
   UserCheck,
 } from 'lucide-react';
 
+interface MatrixRow {
+  facility: string;
+  feature: string;
+  one_1: boolean | string;
+  one_2: boolean | string;
+  one_3: boolean | string;
+  man_1: boolean | string;
+  man_2: boolean | string;
+  man_3: boolean | string;
+  umkm: boolean | string;
+  corp: boolean | string;
+  customText?: Record<string, string>;
+}
+
 export const PackageMatrixTable: React.FC = () => {
   const { data, openOrderModalForPackage } = useApp();
-  const { discountConfig } = data;
+  const { packages = [], channelRates = [], discountConfig } = data;
   const [searchFilter, setSearchFilter] = useState('');
   const [mobileMode, setMobileMode] = useState<'card' | 'table'>('card');
   const [selectedMobileTier, setSelectedMobileTier] = useState<string>('one_3');
 
-  const mobileTiers = [
-    { key: 'one_3', name: 'One Klik (≥500k)', label: 'One Klik ≥500k', sub: 'Terpopuler + Free Web', isPopular: true },
-    { key: 'one_2', name: 'One Klik (200-499k)', label: 'One Klik 200-499k', sub: 'Terima Jadi' },
-    { key: 'one_1', name: 'One Klik (<200k)', label: 'One Klik <200k', sub: 'Hemat Starter' },
-    { key: 'man_3', name: 'Mandiri (≥500k)', label: 'Mandiri ≥500k', sub: 'Kelola Bebas + Free Web' },
-    { key: 'man_2', name: 'Mandiri (200-499k)', label: 'Mandiri 200-499k', sub: 'Kelola Mandiri' },
-    { key: 'man_1', name: 'Mandiri (<200k)', label: 'Mandiri <200k', sub: 'Starter Mandiri' },
-    { key: 'umkm', name: 'Paket UMKM (≥500k)', label: 'UMKM ≥500k', sub: 'Free Web & Konten' },
-    { key: 'corp', name: 'Corporate (≥1 Jt)', label: 'Corporate ≥1 Jt', sub: 'Fasilitas Prioritas' },
-  ];
+  // Helper to map tier keys to actual SubscriptionPackage from database
+  const getPackageForTier = (key: string): SubscriptionPackage | undefined => {
+    const pkgs = packages || [];
+    switch (key) {
+      case 'one_1':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'ONE_KLIK' &&
+              (p.tierName?.includes('<200') ||
+                p.id.includes('tier1') ||
+                p.priceDisplay?.includes('<') ||
+                p.maxBudget === 200000)
+          ) || pkgs.filter((p) => p.category === 'ONE_KLIK')[0]
+        );
+      case 'one_2':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'ONE_KLIK' &&
+              (p.tierName?.includes('200') ||
+                p.id.includes('tier2') ||
+                p.priceDisplay?.includes('200') ||
+                (p.minBudget === 200000 && p.maxBudget && p.maxBudget < 500000))
+          ) || pkgs.filter((p) => p.category === 'ONE_KLIK')[1]
+        );
+      case 'one_3':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'ONE_KLIK' &&
+              (p.tierName?.includes('500') ||
+                p.id.includes('tier3') ||
+                p.priceDisplay?.includes('500') ||
+                p.minBudget >= 500000)
+          ) || pkgs.filter((p) => p.category === 'ONE_KLIK')[2]
+        );
+      case 'man_1':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'MANDIRI' &&
+              (p.tierName?.includes('<200') ||
+                p.id.includes('tier1') ||
+                p.priceDisplay?.includes('<') ||
+                p.maxBudget === 200000)
+          ) || pkgs.filter((p) => p.category === 'MANDIRI')[0]
+        );
+      case 'man_2':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'MANDIRI' &&
+              (p.tierName?.includes('200') ||
+                p.id.includes('tier2') ||
+                p.priceDisplay?.includes('200') ||
+                (p.minBudget === 200000 && p.maxBudget && p.maxBudget < 500000))
+          ) || pkgs.filter((p) => p.category === 'MANDIRI')[1]
+        );
+      case 'man_3':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'MANDIRI' &&
+              (p.tierName?.includes('500') ||
+                p.id.includes('tier3') ||
+                p.priceDisplay?.includes('500') ||
+                p.minBudget >= 500000)
+          ) || pkgs.filter((p) => p.category === 'MANDIRI')[2]
+        );
+      case 'umkm':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'UMKM' ||
+              p.id.includes('umkm') ||
+              p.name?.toLowerCase().includes('umkm')
+          ) || pkgs.find((p) => p.category === 'UMKM')
+        );
+      case 'corp':
+        return (
+          pkgs.find(
+            (p) =>
+              p.category === 'CORPORATE' ||
+              p.id.includes('corporate') ||
+              p.name?.toLowerCase().includes('corp')
+          ) || pkgs.find((p) => p.category === 'CORPORATE')
+        );
+      default:
+        return undefined;
+    }
+  };
 
-  const rows = [
-    // SMS
-    {
-      facility: 'SMS',
-      feature: 'BROADCAST @Rp.100',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'SMS',
-      feature: 'TARGETED @Rp.180',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'SMS',
-      feature: 'LBA @Rp.200',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
+  const mobileTiers = useMemo(() => {
+    const pkgOne3 = getPackageForTier('one_3');
+    const pkgOne2 = getPackageForTier('one_2');
+    const pkgOne1 = getPackageForTier('one_1');
+    const pkgMan3 = getPackageForTier('man_3');
+    const pkgMan2 = getPackageForTier('man_2');
+    const pkgMan1 = getPackageForTier('man_1');
+    const pkgUmkm = getPackageForTier('umkm');
+    const pkgCorp = getPackageForTier('corp');
 
-    // SMS FLASH
-    {
-      facility: 'SMS FLASH',
-      feature: 'BROADCAST @Rp.250',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'SMS FLASH',
-      feature: 'TARGETED @Rp.350',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'SMS FLASH',
-      feature: 'LBA @Rp.350',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // MMS
-    {
-      facility: 'MMS',
-      feature: 'BROADCAST @Rp.250',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'MMS',
-      feature: 'TARGETED @Rp.330',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'MMS',
-      feature: 'LBA @Rp.330',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // POPUP USSD
-    {
-      facility: 'POPUP USSD',
-      feature: 'BROADCAST @Rp.100',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'POPUP USSD',
-      feature: 'TARGETED @Rp.175',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'POPUP USSD',
-      feature: 'LBA @Rp.175',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // POPUP INTERAKTIF
-    {
-      facility: 'POPUP INTERAKTIF',
-      feature: 'BROADCAST @Rp.200',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // RCS
-    {
-      facility: 'RCS',
-      feature: 'BROADCAST @Rp.350',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'RCS',
-      feature: 'TARGETED @Rp.350',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'RCS',
-      feature: 'LBA @Rp.450',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // WA BUSINESS WABA
-    {
-      facility: 'WA BUSINESS WABA',
-      feature: 'BROADCAST @Rp.605',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'WA BUSINESS WABA',
-      feature: 'TARGETED @Rp.1100',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-    {
-      facility: 'WA BUSINESS WABA',
-      feature: 'LBA @Rp.1100',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // WA BUSINESS UTILITY WABA
-    {
-      facility: 'WA BUSINESS UTILITY WABA',
-      feature: 'BROADCAST @Rp.354',
-      one_1: true,
-      one_2: true,
-      one_3: true,
-      man_1: true,
-      man_2: true,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // GRATIS KONTEN
-    {
-      facility: 'GRATIS KONTEN UNTUK FB+INSTAGRAM+TIKTOK',
-      feature: 'FREE PERBULAN',
-      customText: {
-        one_1: '1X',
-        one_2: '2X',
-        one_3: '4X',
-        man_1: '1X',
-        man_2: '2X',
-        man_3: '4X',
-        umkm: '4X',
-        corp: '4X',
+    return [
+      {
+        key: 'one_3',
+        name: pkgOne3?.name || 'One Klik (≥500k)',
+        label: `One Klik ${pkgOne3?.tierName || '≥500k'}`,
+        sub: pkgOne3?.tagline || 'Terpopuler + Free Web',
+        isPopular: pkgOne3?.isPopular ?? true,
       },
-    },
-
-    // FREE WEBSITE
-    {
-      facility: 'FREE WEBSITE',
-      feature: '3 BULAN',
-      one_1: false,
-      one_2: false,
-      one_3: true,
-      man_1: false,
-      man_2: false,
-      man_3: true,
-      umkm: true,
-      corp: true,
-    },
-
-    // PEMBUATAN AKUN MY ADS
-    {
-      facility: 'PEMBUATAN AKUN MY ADS',
-      feature: 'GRATIS',
-      customText: {
-        one_1: 'Akun AD',
-        one_2: 'Akun AD',
-        one_3: 'Akun AD',
-        man_1: 'Akun AD/Pribadi',
-        man_2: 'Akun AD/Pribadi',
-        man_3: 'Akun AD/Pribadi',
-        umkm: 'Akun AD/Pribadi',
-        corp: 'Akun AD/Pribadi',
+      {
+        key: 'one_2',
+        name: pkgOne2?.name || 'One Klik (200-499k)',
+        label: `One Klik ${pkgOne2?.tierName || '200-499k'}`,
+        sub: pkgOne2?.tagline || 'Terima Jadi',
+        isPopular: pkgOne2?.isPopular ?? false,
       },
-    },
-
-    // SALDO MY ADS
-    {
-      facility: 'SALDO MY ADS',
-      feature: 'NOMINAL',
-      customText: {
-        one_1: 'SESUAI PAKET',
-        one_2: 'SESUAI PAKET',
-        one_3: 'SESUAI PAKET',
-        man_1: 'SESUAI PAKET',
-        man_2: 'SESUAI PAKET',
-        man_3: 'SESUAI PAKET',
-        umkm: 'SESUAI PAKET',
-        corp: 'SESUAI PAKET',
+      {
+        key: 'one_1',
+        name: pkgOne1?.name || 'One Klik (<200k)',
+        label: `One Klik ${pkgOne1?.tierName || '<200k'}`,
+        sub: pkgOne1?.tagline || 'Hemat Starter',
+        isPopular: pkgOne1?.isPopular ?? false,
       },
-    },
+      {
+        key: 'man_3',
+        name: pkgMan3?.name || 'Mandiri (≥500k)',
+        label: `Mandiri ${pkgMan3?.tierName || '≥500k'}`,
+        sub: pkgMan3?.tagline || 'Kelola Bebas + Free Web',
+        isPopular: pkgMan3?.isPopular ?? false,
+      },
+      {
+        key: 'man_2',
+        name: pkgMan2?.name || 'Mandiri (200-499k)',
+        label: `Mandiri ${pkgMan2?.tierName || '200-499k'}`,
+        sub: pkgMan2?.tagline || 'Kelola Mandiri',
+        isPopular: pkgMan2?.isPopular ?? false,
+      },
+      {
+        key: 'man_1',
+        name: pkgMan1?.name || 'Mandiri (<200k)',
+        label: `Mandiri ${pkgMan1?.tierName || '<200k'}`,
+        sub: pkgMan1?.tagline || 'Starter Mandiri',
+        isPopular: pkgMan1?.isPopular ?? false,
+      },
+      {
+        key: 'umkm',
+        name: pkgUmkm?.name || 'Paket UMKM (≥500k)',
+        label: `UMKM ${pkgUmkm?.tierName || '≥500k'}`,
+        sub: pkgUmkm?.tagline || 'Free Web & Konten',
+        isPopular: pkgUmkm?.isPopular ?? true,
+      },
+      {
+        key: 'corp',
+        name: pkgCorp?.name || 'Corporate (≥1 Jt)',
+        label: `Corporate ${pkgCorp?.tierName || '≥1 Jt'}`,
+        sub: pkgCorp?.tagline || 'Fasilitas Prioritas',
+        isPopular: pkgCorp?.isPopular ?? false,
+      },
+    ];
+  }, [packages]);
 
-    // BONUS SALDO ISI ULANG
-    {
-      facility: 'BONUS SALDO ISI ULANG',
-      feature: 'PROMO MONETARY',
-      customText: {
+  // Dynamically build rows synchronized with packages & channelRates database
+  const rows = useMemo<MatrixRow[]>(() => {
+    // 1. Channel rates rows (SMS, MMS, USSD, RCS, WA WABA, etc.)
+    const channelRows = channelRates.map((cr) => {
+      const isEnabledForPkg = (pkgKey: string) => {
+        const pkg = getPackageForTier(pkgKey);
+        if (!pkg) return true;
+        if (!pkg.enabledRateIds || pkg.enabledRateIds.length === 0) return true;
+        return pkg.enabledRateIds.includes(cr.id);
+      };
+
+      return {
+        facility: cr.facility,
+        feature: `${cr.featureName} ${cr.rateDisplay || `@Rp.${cr.ratePerUnit}`}`,
+        one_1: isEnabledForPkg('one_1'),
+        one_2: isEnabledForPkg('one_2'),
+        one_3: isEnabledForPkg('one_3'),
+        man_1: isEnabledForPkg('man_1'),
+        man_2: isEnabledForPkg('man_2'),
+        man_3: isEnabledForPkg('man_3'),
+        umkm: isEnabledForPkg('umkm'),
+        corp: isEnabledForPkg('corp'),
+      };
+    });
+
+    // Helpers to retrieve package values from database
+    const getContentCount = (pkgKey: string, defaultVal: number) => {
+      const pkg = getPackageForTier(pkgKey);
+      if (pkg && typeof pkg.freeContentPerMonth === 'number') {
+        return `${pkg.freeContentPerMonth}X`;
+      }
+      return `${defaultVal}X`;
+    };
+
+    const hasFreeWebsite = (pkgKey: string, defaultVal: boolean) => {
+      const pkg = getPackageForTier(pkgKey);
+      if (pkg) {
+        return Boolean(
+          (pkg.freeWebsiteMonths && pkg.freeWebsiteMonths > 0) || (pkg as any).freeWebsiteBonus
+        );
+      }
+      return defaultVal;
+    };
+
+    const getAccountType = (pkgKey: string, defaultVal: string) => {
+      const pkg = getPackageForTier(pkgKey);
+      if (pkg && pkg.accountType) {
+        return pkg.accountType;
+      }
+      return defaultVal;
+    };
+
+    const getSaldoInfo = (pkgKey: string) => {
+      const pkg = getPackageForTier(pkgKey);
+      if (pkg && pkg.saldoInfo) {
+        return pkg.saldoInfo;
+      }
+      return 'SESUAI PAKET';
+    };
+
+    const discountPercent = discountConfig?.reloadDiscountPercent || 50;
+
+    // 2. Special Benefits Rows directly bound to Database
+    const specialRows = [
+      // GRATIS KONTEN UNTUK FB+INSTAGRAM+TIKTOK (Dynamic from pkg.freeContentPerMonth)
+      {
+        facility: 'GRATIS KONTEN UNTUK FB+INSTAGRAM+TIKTOK',
+        feature: 'FREE PERBULAN',
+        customText: {
+          one_1: getContentCount('one_1', 1),
+          one_2: getContentCount('one_2', 2),
+          one_3: getContentCount('one_3', 4),
+          man_1: getContentCount('man_1', 1),
+          man_2: getContentCount('man_2', 2),
+          man_3: getContentCount('man_3', 4),
+          umkm: getContentCount('umkm', 4),
+          corp: getContentCount('corp', 4),
+        },
+        one_1: getContentCount('one_1', 1),
+        one_2: getContentCount('one_2', 2),
+        one_3: getContentCount('one_3', 4),
+        man_1: getContentCount('man_1', 1),
+        man_2: getContentCount('man_2', 2),
+        man_3: getContentCount('man_3', 4),
+        umkm: getContentCount('umkm', 4),
+        corp: getContentCount('corp', 4),
+      },
+
+      // FREE WEBSITE (Dynamic from pkg.freeWebsiteMonths)
+      {
+        facility: 'FREE WEBSITE',
+        feature: '3 BULAN',
+        one_1: hasFreeWebsite('one_1', false),
+        one_2: hasFreeWebsite('one_2', false),
+        one_3: hasFreeWebsite('one_3', true),
+        man_1: hasFreeWebsite('man_1', false),
+        man_2: hasFreeWebsite('man_2', false),
+        man_3: hasFreeWebsite('man_3', true),
+        umkm: hasFreeWebsite('umkm', true),
+        corp: hasFreeWebsite('corp', true),
+      },
+
+      // PEMBUATAN AKUN MY ADS (Dynamic from pkg.accountType)
+      {
+        facility: 'PEMBUATAN AKUN MY ADS',
+        feature: 'GRATIS',
+        customText: {
+          one_1: getAccountType('one_1', 'Akun AD'),
+          one_2: getAccountType('one_2', 'Akun AD'),
+          one_3: getAccountType('one_3', 'Akun AD'),
+          man_1: getAccountType('man_1', 'Akun AD/Pribadi'),
+          man_2: getAccountType('man_2', 'Akun AD/Pribadi'),
+          man_3: getAccountType('man_3', 'Akun AD/Pribadi'),
+          umkm: getAccountType('umkm', 'Akun AD/Pribadi'),
+          corp: getAccountType('corp', 'Akun AD/Pribadi'),
+        },
+        one_1: getAccountType('one_1', 'Akun AD'),
+        one_2: getAccountType('one_2', 'Akun AD'),
+        one_3: getAccountType('one_3', 'Akun AD'),
+        man_1: getAccountType('man_1', 'Akun AD/Pribadi'),
+        man_2: getAccountType('man_2', 'Akun AD/Pribadi'),
+        man_3: getAccountType('man_3', 'Akun AD/Pribadi'),
+        umkm: getAccountType('umkm', 'Akun AD/Pribadi'),
+        corp: getAccountType('corp', 'Akun AD/Pribadi'),
+      },
+
+      // SALDO MY ADS (Dynamic from pkg.saldoInfo)
+      {
+        facility: 'SALDO MY ADS',
+        feature: 'NOMINAL',
+        customText: {
+          one_1: getSaldoInfo('one_1'),
+          one_2: getSaldoInfo('one_2'),
+          one_3: getSaldoInfo('one_3'),
+          man_1: getSaldoInfo('man_1'),
+          man_2: getSaldoInfo('man_2'),
+          man_3: getSaldoInfo('man_3'),
+          umkm: getSaldoInfo('umkm'),
+          corp: getSaldoInfo('corp'),
+        },
+        one_1: getSaldoInfo('one_1'),
+        one_2: getSaldoInfo('one_2'),
+        one_3: getSaldoInfo('one_3'),
+        man_1: getSaldoInfo('man_1'),
+        man_2: getSaldoInfo('man_2'),
+        man_3: getSaldoInfo('man_3'),
+        umkm: getSaldoInfo('umkm'),
+        corp: getSaldoInfo('corp'),
+      },
+
+      // BONUS SALDO ISI ULANG (Dynamic from discountConfig)
+      {
+        facility: 'BONUS SALDO ISI ULANG',
+        feature: 'PROMO MONETARY',
+        customText: {
+          one_1: 'TIDAK ADA',
+          one_2: 'TIDAK ADA',
+          one_3: 'TIDAK ADA',
+          man_1: `s/d ${discountPercent}%`,
+          man_2: `s/d ${discountPercent}%`,
+          man_3: `s/d ${discountPercent}%`,
+          umkm: `s/d ${discountPercent}%`,
+          corp: `s/d ${discountPercent}%`,
+        },
         one_1: 'TIDAK ADA',
         one_2: 'TIDAK ADA',
         one_3: 'TIDAK ADA',
-        man_1: `s/d ${discountConfig.reloadDiscountPercent}%`,
-        man_2: `s/d ${discountConfig.reloadDiscountPercent}%`,
-        man_3: `s/d ${discountConfig.reloadDiscountPercent}%`,
-        umkm: `s/d ${discountConfig.reloadDiscountPercent}%`,
-        corp: `s/d ${discountConfig.reloadDiscountPercent}%`,
+        man_1: `s/d ${discountPercent}%`,
+        man_2: `s/d ${discountPercent}%`,
+        man_3: `s/d ${discountPercent}%`,
+        umkm: `s/d ${discountPercent}%`,
+        corp: `s/d ${discountPercent}%`,
       },
-    },
-  ];
+    ];
+
+    return [...channelRows, ...specialRows];
+  }, [packages, channelRates, discountConfig]);
 
   const filteredRows = rows.filter((r) => {
     if (!searchFilter) return true;

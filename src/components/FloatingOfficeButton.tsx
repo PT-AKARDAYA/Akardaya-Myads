@@ -203,22 +203,7 @@ export const FloatingOfficeButton: React.FC = () => {
       </AnimatePresence>
 
       {/* Floating Trigger Button */}
-      <div className="relative group flex items-center gap-2">
-        {/* Animated Label Pill (Shown when closed) */}
-        {!isOpen && (
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(true);
-              trackRealVisitor('/floating-office-pill-click', 'pageview', data?.companyConfig?.spreadsheetUrl);
-            }}
-            className="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-slate-900/90 dark:bg-slate-800/95 text-white text-[10px] font-bold shadow-lg border border-slate-700/60 backdrop-blur-xs animate-in fade-in slide-in-from-right-2 duration-300"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-            <span>Lokasi Kantor</span>
-          </button>
-        )}
-
+      <div className="relative group">
         {/* Main Floating Icon Button */}
         <button
           id="btn-floating-office-mobile"

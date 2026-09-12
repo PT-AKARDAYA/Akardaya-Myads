@@ -617,13 +617,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   connectWebSocketRef.current = connectWebSocket;
 
   useEffect(() => {
-    // Schedule background data refresh after initial paint
-    const timer = setTimeout(() => {
-      fetchInitialDataRef.current();
-      connectWebSocketRef.current();
-    }, 50);
+    // 1. Instant startup: connect real-time websocket and fast local cache
+    fetchInitialDataRef.current();
+    connectWebSocketRef.current();
 
-    // 1. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
+    // 2. Exactly 1 second (1000ms) after app open: perform silent background sync with Google Sheets & Server
+    const backgroundSyncTimer = setTimeout(() => {
+      console.log('🔄 [Background Sync] Memulai sinkronisasi data otomatis 1 detik setelah aplikasi dibuka...');
+      syncLatestDataRef.current(true, true);
+    }, 1000);
+
+    // 3. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
     try {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('akardaya_live_data_sync');
@@ -700,7 +704,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 15000);
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(backgroundSyncTimer);
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
