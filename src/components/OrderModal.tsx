@@ -270,7 +270,60 @@ export const OrderModal: React.FC = () => {
   const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
   const [selectedBankAccountId, setSelectedBankAccountId] = useState<string | null>(null);
   const [copiedBankId, setCopiedBankId] = useState<string | null>(null);
+  const [isUploadingProof, setIsUploadingProof] = useState<boolean>(false);
   const prevIsOpenRef = useRef<boolean>(false);
+
+  const handleCustomerUploadProof = (file: File) => {
+    setIsUploadingProof(true);
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1200;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > maxDim) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          }
+        } else {
+          if (h > maxDim) {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const nowStr = new Date().toLocaleString('id-ID');
+          if (createdOrder) {
+            const updated: OrderLead = {
+              ...createdOrder,
+              paymentProofUrl: dataUrl,
+              paymentProofFileName: file.name,
+              paymentProofUploadedAt: nowStr,
+            };
+            setCreatedOrder(updated);
+            fetch('/api/orders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated),
+            }).catch(console.error);
+          }
+        }
+        setIsUploadingProof(false);
+      };
+      img.onerror = () => setIsUploadingProof(false);
+    };
+    reader.onerror = () => setIsUploadingProof(false);
+  };
 
   // Active Bank Accounts for Payment
   const activeBankAccounts: BankAccount[] = useMemo(() => {
@@ -3039,10 +3092,97 @@ export const OrderModal: React.FC = () => {
                   </strong>
                   <p className="text-[11px] sm:text-xs">
                     {companyConfig.paymentInstructions ||
-                      'Silakan transfer tepat sesuai estimasi total tagihan di atas ke rekening resmi kami. Setelah transfer berhasil, klik tombol WhatsApp di bawah untuk melampirkan screenshot bukti transfer agar kampanye iklan segera diaktifkan.'}
+                      'Silakan transfer tepat sesuai estimasi total tagihan di atas ke rekening resmi kami. Setelah transfer berhasil, unggah bukti transfer di bawah atau kirim via WhatsApp agar kampanye iklan segera diaktifkan.'}
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Unggah Bukti Transfer Pembayaran (Opsional) */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border-2 border-dashed border-emerald-500/40 dark:border-emerald-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <UploadCloud className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>Unggah Bukti Transfer</span>
+                      <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                        {createdOrder?.paymentProofUrl ? 'Terlampir ✓' : 'Opsional'}
+                      </span>
+                    </h5>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Lampirkan screenshot m-Banking atau foto struk ATM Anda
+                    </p>
+                  </div>
+                </div>
+
+                {createdOrder?.paymentProofUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (createdOrder) {
+                        const updated = {
+                          ...createdOrder,
+                          paymentProofUrl: undefined,
+                          paymentProofFileName: undefined,
+                          paymentProofUploadedAt: undefined,
+                        };
+                        setCreatedOrder(updated);
+                        fetch('/api/orders', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(updated),
+                        }).catch(console.error);
+                      }
+                    }}
+                    className="text-xs text-rose-500 hover:text-rose-600 font-semibold p-1"
+                  >
+                    Hapus
+                  </button>
+                )}
+              </div>
+
+              {createdOrder?.paymentProofUrl ? (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
+                  <img
+                    src={createdOrder.paymentProofUrl}
+                    alt="Bukti Transfer"
+                    className="w-14 h-14 object-cover rounded-lg border border-emerald-300 dark:border-emerald-700 shadow-2xs shrink-0"
+                  />
+                  <div className="min-w-0 flex-1 text-xs">
+                    <p className="font-bold text-slate-900 dark:text-white truncate">
+                      {createdOrder.paymentProofFileName || 'Struk_Transfer.jpg'}
+                    </p>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      ✓ Bukti transfer tersimpan & siap divalidasi admin
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {createdOrder.paymentProofUploadedAt}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 cursor-pointer transition-colors text-center">
+                  <UploadCloud className="w-6 h-6 text-emerald-600 dark:text-emerald-400 mb-1.5" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {isUploadingProof ? 'Sedang Memproses Foto...' : 'Pilih / Jepret Foto Bukti Transfer'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    Format: JPG, PNG, WEBP (Otomatis Dioptimasi)
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleCustomerUploadProof(file);
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             {/* 3 Langkah Mudah Setelah Transfer */}

@@ -142,6 +142,10 @@ export interface OrderLead {
   uploadedListFileName?: string; // Nama file Excel/CSV yang diupload
   uploadedListFileCount?: number; // Jumlah nomor/baris dalam file
   uploadedListFileSize?: string; // Ukuran file terformat (e.g. "124 KB")
+  // Bukti Transfer Pembayaran
+  paymentProofUrl?: string; // URL / Base64 Data URL bukti transfer pembayaran
+  paymentProofFileName?: string; // Nama file bukti transfer
+  paymentProofUploadedAt?: string; // Waktu upload bukti transfer
 }
 
 export interface OfficeLocation {

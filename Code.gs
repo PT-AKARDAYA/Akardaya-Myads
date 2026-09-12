@@ -147,7 +147,7 @@ function setupSheets() {
     formatHeader(s, "#7C3AED"); // Purple header
   }
 
-  // 7. Sheet PESANAN_LEADS (Lengkap dengan Email Akun MyAds & Parameter Kampanye Profiling Terbaru)
+  // 7. Sheet PESANAN_LEADS (Lengkap dengan Email Akun MyAds, Bukti Transfer & Parameter Kampanye)
   const LEADS_HEADERS = [
     "ID", "WAKTU_ORDER", "NAMA_PELANGGAN", "NO_WHATSAPP", "NAMA_BISNIS", "EMAIL_MYADS",
     "PAKET_PILIHAN", "ESTIMASI_ANGGARAN", "TOTAL_PEMBAYARAN", "TIPE_KAMPANYE", "SALURAN_MEDIA", "ESTIMASI_JANGKAUAN",
@@ -156,7 +156,7 @@ function setupSheets() {
     "TANGGAL_BROADCAST", "SENDER_ID", "ISI_PESAN_IKLAN", "LINK_WEB",
     "FILE_LIST_KONTAK", "JUMLAH_KONTAK_FILE",
     "TARGET_USIA", "TARGET_GENDER", "TARGET_AGAMA", "TARGET_ARPU", "TARGET_SES", "TARGET_DEVICE_OS", "TARGET_PERNIKAHAN", "TARGET_MINAT",
-    "STATUS", "CATATAN"
+    "BUKTI_TRANSFER", "STATUS", "CATATAN"
   ];
 
   if (!ss.getSheetByName(SHEET_LEADS)) {
@@ -353,6 +353,7 @@ function doPost(e) {
         lead.targetDeviceOs || "",
         lead.targetMaritalStatus || "",
         targetInterestsStr,
+        lead.paymentProofUrl || lead.paymentProof || "",
         lead.status || "PENDING",
         lead.notes || ""
       ]);
@@ -1202,6 +1203,7 @@ function readLeadsSheet(ss) {
       targetDeviceOs: getVal(r, "TARGET_DEVICE_OS") ? String(getVal(r, "TARGET_DEVICE_OS")) : undefined,
       targetMaritalStatus: getVal(r, "TARGET_PERNIKAHAN") ? String(getVal(r, "TARGET_PERNIKAHAN")) : undefined,
       targetInterests: interests.length > 0 ? interests : undefined,
+      paymentProofUrl: getVal(r, "BUKTI_TRANSFER") ? String(getVal(r, "BUKTI_TRANSFER")) : undefined,
       status: String(getVal(r, "STATUS", 8)) || "PENDING",
       notes: getVal(r, "CATATAN", 9) ? String(getVal(r, "CATATAN", 9)) : ""
     };
@@ -1454,6 +1456,7 @@ function saveAllSheets(ss, data) {
         o.targetDeviceOs || "",
         o.targetMaritalStatus || "",
         interestsStr,
+        o.paymentProofUrl || "",
         o.status || "PENDING",
         o.notes || ""
       ];
