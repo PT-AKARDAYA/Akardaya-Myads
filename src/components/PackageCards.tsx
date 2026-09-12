@@ -296,7 +296,7 @@ export const PackageCards: React.FC = () => {
             <div
               ref={carouselRef}
               onScroll={handleCarouselScroll}
-              className="flex overflow-x-auto snap-x snap-mandatory gap-3.5 pb-4 no-scrollbar -mx-4 px-4"
+              className="flex overflow-x-auto snap-x snap-mandatory gap-3.5 pt-4 pb-4 no-scrollbar -mx-4 px-4"
               style={{ scrollBehavior: 'smooth' }}
             >
               {filteredPackages.map((pkg, idx) => {
@@ -304,7 +304,7 @@ export const PackageCards: React.FC = () => {
                 return (
                   <div
                     key={`carousel-${pkg.id}`}
-                    className="w-[84vw] max-w-[330px] shrink-0 snap-center flex flex-col"
+                    className="w-[84vw] max-w-[330px] shrink-0 snap-center flex flex-col pt-1"
                   >
                     <div
                       className={`relative flex flex-col h-full rounded-2xl transition-all border ${
@@ -315,7 +315,7 @@ export const PackageCards: React.FC = () => {
                     >
                       {/* Top Badge */}
                       {pkg.badge && (
-                        <div className="absolute -top-3 left-4 flex justify-start">
+                        <div className="absolute -top-3 left-4 flex justify-start z-10">
                           <span
                             className={`px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wide shadow-xs ${
                               pkg.isPopular
@@ -478,7 +478,7 @@ export const PackageCards: React.FC = () => {
         {/* ========================================================================= */}
         {/* DESKTOP & MOBILE GRID VIEW */}
         {/* ========================================================================= */}
-        <div className={`${mobileViewMode === 'grid' ? 'grid' : 'hidden md:grid'} grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6`}>
+        <div className={`${mobileViewMode === 'grid' ? 'grid' : 'hidden md:grid'} grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-4`}>
           {filteredPackages.map((pkg) => {
             const isExpanded = expandedCardId === pkg.id;
 
@@ -494,7 +494,7 @@ export const PackageCards: React.FC = () => {
               >
                 {/* Top Badge */}
                 {pkg.badge && (
-                  <div className="absolute -top-3 left-4 right-4 flex justify-start">
+                  <div className="absolute -top-3 left-4 right-4 flex justify-start z-10">
                     <span
                       className={`px-3 py-0.5 rounded-full text-[11px] font-bold tracking-wide shadow-xs ${
                         pkg.isPopular
