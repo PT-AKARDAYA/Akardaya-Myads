@@ -14,12 +14,12 @@ export interface SubscriptionPackage {
   id: string;
   category: PackageCategory;
   categoryTitle: string; // "PAKET ONE KLIK TERIMA JADI", "PAKET MANDIRI", "PAKET UMKM", "PAKET CORPORATE"
-  tierName: string; // "<200.000", "201.000 - 500.000", ">501.000", ">500.000", ">1000.000"
+  tierName: string; // "<200.000", "200.000 - 499.999", "≥ 500.000", "≥ 1.000.000"
   name: string; // e.g. "One Klik Starter (<200k)", "One Klik Pro (201-500k)", etc.
   tagline: string;
   minBudget: number; // in IDR
   maxBudget?: number; // in IDR
-  priceDisplay: string; // e.g. "Mulai Rp 150rb", "Rp 201rb - 500rb", "> Rp 501.000"
+  priceDisplay: string; // e.g. "Mulai Rp 150rb", "Rp 200.000 - 499.999", "≥ Rp 500.000"
   badge?: string; // "Paling Praktis", "Pilihan Populer", "Rekomendasi UMKM", "Solusi Enterprise"
   isPopular?: boolean;
   
@@ -54,6 +54,16 @@ export interface DiscountConfig {
   promoCountdownEnd?: string; // ISO date string
 }
 
+export interface BankAccount {
+  id: string;
+  bankName: string; // e.g. "BCA (Bank Central Asia)"
+  accountNumber: string; // e.g. "0188-3333-7157"
+  accountHolder: string; // e.g. "PT Akardaya Telekomunikasi Indonesia"
+  isPrimary?: boolean;
+  isActive?: boolean;
+  notes?: string; // e.g. "Menerima transfer dari semua bank / BI-FAST"
+}
+
 export interface CompanyConfig {
   brandName: string;
   brandTagline: string;
@@ -65,6 +75,12 @@ export interface CompanyConfig {
   announcementText: string;
   showAnnouncement: boolean;
   spreadsheetUrl?: string; // Google Apps Script Web App Deployment URL
+  // Pengaturan Rekening Pembayaran Resmi (Admin Setting)
+  bankName?: string; // e.g. "BCA (Bank Central Asia)" (Legacy/Fallback)
+  bankAccountNumber?: string; // e.g. "0188-3333-7157" (Legacy/Fallback)
+  bankAccountHolder?: string; // e.g. "PT Akardaya Telekomunikasi Indonesia" (Legacy/Fallback)
+  paymentInstructions?: string; // e.g. "Silakan transfer sesuai estimasi total ke rekening resmi di atas..."
+  bankAccounts?: BankAccount[]; // Multi-rekening resmi admin
 }
 
 export interface Testimonial {
@@ -93,6 +109,12 @@ export interface OrderLead {
   createdAt: string;
   status: 'PENDING' | 'CONTACTED' | 'ACTIVE' | 'COMPLETED';
   isRead?: boolean;
+  // Detail Pilihan Order Kampanye
+  campaignType?: 'LBA' | 'BROADCAST' | 'TARGETED' | string;
+  channelName?: string;
+  channelRate?: number;
+  estimatedReach?: number;
+  totalPayment?: number;
 }
 
 export interface OfficeLocation {

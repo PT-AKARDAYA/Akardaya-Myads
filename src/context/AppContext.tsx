@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfig, Testimonial, OrderLead, WebSocketMessage } from '../types';
+import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfig, Testimonial, OrderLead, OfficeLocation, WebSocketMessage } from '../types';
 import { INITIAL_APP_DATA, DEFAULT_OFFICE_LOCATIONS, DEFAULT_PACKAGES, DEFAULT_CHANNEL_RATES, DEFAULT_TESTIMONIALS } from '../data/defaultData';
 
 export const PERMANENT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec';
@@ -9,9 +9,84 @@ export const safeNormalizeData = (incoming: any): AppData => {
     return INITIAL_APP_DATA;
   }
 
-  const safePackages = Array.isArray(incoming.packages) && incoming.packages.length > 0
+  const rawPackages = Array.isArray(incoming.packages) && incoming.packages.length > 0
     ? incoming.packages
     : DEFAULT_PACKAGES;
+
+  const safePackages = rawPackages.map((pkg: any) => {
+    let p = { ...pkg };
+    if (typeof p.priceDisplay === 'string') {
+      p.priceDisplay = p.priceDisplay
+        .replace(/>=/g, '≥')
+        .replace(/<=/g, '≤')
+        .replace(/>\s*Rp/g, '≥ Rp')
+        .replace(/^>\s*/, '≥ ')
+        .replace(/Rp\s*200\.000\s*-\s*Rp\s*499\.999/gi, 'Rp 200.000 - 499.999');
+    }
+    if (typeof p.tierName === 'string') {
+      p.tierName = p.tierName
+        .replace(/>=/g, '≥')
+        .replace(/<=/g, '≤')
+        .replace(/>\s*Rp/g, '≥ Rp')
+        .replace(/^>\s*/, '≥ ');
+    }
+    if (typeof p.name === 'string') {
+      p.name = p.name.replace(/>=/g, '≥').replace(/<=/g, '≤');
+    }
+    if (typeof p.tagline === 'string') {
+      p.tagline = p.tagline.replace(/>=/g, '≥').replace(/<=/g, '≤');
+    }
+
+    if (p.id === 'one_klik_tier2' && (p.priceDisplay === 'Rp 201rb - 500rb' || p.priceDisplay === 'Rp 200.000 - < 500rb' || p.priceDisplay === 'Rp 200.000 - Rp 499.999' || p.minBudget === 201000)) {
+      return {
+        ...p,
+        minBudget: 200000,
+        maxBudget: 499999,
+        tierName: '200.000 - 499.999',
+        priceDisplay: 'Rp 200.000 - 499.999',
+      };
+    }
+    if (p.id === 'mandiri_tier2' && (p.priceDisplay === 'Rp 201rb - 500rb' || p.priceDisplay === 'Rp 200.000 - < 500rb' || p.priceDisplay === 'Rp 200.000 - Rp 499.999' || p.minBudget === 201000)) {
+      return {
+        ...p,
+        minBudget: 200000,
+        maxBudget: 499999,
+        tierName: '200.000 - 499.999',
+        priceDisplay: 'Rp 200.000 - 499.999',
+      };
+    }
+    if (p.id === 'one_klik_tier3' && (p.priceDisplay === '> Rp 501.000' || p.priceDisplay === '≥ Rp 500.000' || p.priceDisplay === '>= Rp 500.000' || p.minBudget === 501000 || p.priceDisplay?.includes('501'))) {
+      return {
+        ...p,
+        minBudget: 500000,
+        tierName: '≥ 500.000',
+        priceDisplay: '≥ Rp 500.000',
+      };
+    }
+    if (p.id === 'mandiri_tier3' && (p.priceDisplay === '> Rp 501.000' || p.priceDisplay === '≥ Rp 500.000' || p.priceDisplay === '>= Rp 500.000' || p.minBudget === 501000 || p.priceDisplay?.includes('501'))) {
+      return {
+        ...p,
+        minBudget: 500000,
+        tierName: '≥ 500.000',
+        priceDisplay: '≥ Rp 500.000',
+      };
+    }
+    if (p.id === 'paket_umkm') {
+      return {
+        ...p,
+        tierName: '≥ 500.000',
+        priceDisplay: '≥ Rp 500.000',
+      };
+    }
+    if (p.id === 'paket_corporate') {
+      return {
+        ...p,
+        tierName: '≥ 1.000.000',
+        priceDisplay: '≥ Rp 1.000.000',
+      };
+    }
+    return p;
+  });
 
   const safeChannelRates = Array.isArray(incoming.channelRates) && incoming.channelRates.length > 0
     ? incoming.channelRates
@@ -33,7 +108,22 @@ export const safeNormalizeData = (incoming: any): AppData => {
     ...INITIAL_APP_DATA.discountConfig,
     ...rawDiscountConfig,
     monetaryTiers: Array.isArray(incomingTiers) && incomingTiers.length > 0
-      ? incomingTiers
+      ? incomingTiers.map((t: any) => {
+          let minAmount = Number(t.minAmount);
+          let maxAmount = t.maxAmount === null || t.maxAmount === undefined ? null : Number(t.maxAmount);
+          if (t.id === 'tier-30' && minAmount === 500001) {
+            minAmount = 500000;
+          }
+          if (t.id === 'tier-0' && maxAmount === 500000) {
+            maxAmount = 499999;
+          }
+          return {
+            ...t,
+            minAmount: isNaN(minAmount) ? 0 : minAmount,
+            maxAmount: maxAmount !== null && isNaN(maxAmount) ? null : maxAmount,
+            label: (t.label || '').replace(/>=/g, '≥').replace(/<=/g, '≤'),
+          };
+        })
       : INITIAL_APP_DATA.discountConfig.monetaryTiers,
   };
 
@@ -69,6 +159,31 @@ export const safeNormalizeData = (incoming: any): AppData => {
     announcementText: rawCompany.announcementText !== undefined && rawCompany.announcementText !== null ? rawCompany.announcementText : INITIAL_APP_DATA.companyConfig.announcementText,
     showAnnouncement: rawCompany.showAnnouncement !== undefined ? Boolean(rawCompany.showAnnouncement) : INITIAL_APP_DATA.companyConfig.showAnnouncement,
     spreadsheetUrl: rawCompany.spreadsheetUrl || PERMANENT_GAS_URL,
+    bankName: rawCompany.bankName || INITIAL_APP_DATA.companyConfig.bankName,
+    bankAccountNumber: rawCompany.bankAccountNumber || INITIAL_APP_DATA.companyConfig.bankAccountNumber,
+    bankAccountHolder: rawCompany.bankAccountHolder || INITIAL_APP_DATA.companyConfig.bankAccountHolder,
+    paymentInstructions: rawCompany.paymentInstructions || INITIAL_APP_DATA.companyConfig.paymentInstructions,
+    bankAccounts: (Array.isArray(rawCompany.bankAccounts) && rawCompany.bankAccounts.length > 0)
+      ? rawCompany.bankAccounts.map((b: any, idx: number) => ({
+          id: b.id || `bank-${idx}-${Date.now()}`,
+          bankName: b.bankName || 'BCA (Bank Central Asia)',
+          accountNumber: b.accountNumber || '0188-3333-7157',
+          accountHolder: b.accountHolder || 'PT Akardaya Telekomunikasi Indonesia',
+          isPrimary: b.isPrimary !== undefined ? Boolean(b.isPrimary) : idx === 0,
+          isActive: b.isActive !== undefined ? Boolean(b.isActive) : true,
+          notes: b.notes || '',
+        }))
+      : (INITIAL_APP_DATA.companyConfig.bankAccounts || [
+          {
+            id: 'bank-bca-primary',
+            bankName: rawCompany.bankName || 'BCA (Bank Central Asia)',
+            accountNumber: rawCompany.bankAccountNumber || '0188-3333-7157',
+            accountHolder: rawCompany.bankAccountHolder || 'PT Akardaya Telekomunikasi Indonesia',
+            isPrimary: true,
+            isActive: true,
+            notes: 'Rekening Utama',
+          },
+        ]),
   };
 
   const safeOffices: OfficeLocation[] = (Array.isArray(incoming.offices) && incoming.offices.length > 0
@@ -139,7 +254,7 @@ interface AppContextType {
   openOrderModalForPackage: (pkg: SubscriptionPackage | null) => void;
   updateAppData: (newData: Partial<AppData>) => Promise<boolean>;
   submitReview: (review: Omit<Testimonial, 'id' | 'date' | 'avatarBgColor' | 'verified'>) => Promise<boolean>;
-  submitOrder: (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
+  submitOrder: (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>) => Promise<OrderLead | null>;
   resetToDefaults: () => Promise<boolean>;
   refreshData: (silent?: boolean, force?: boolean) => Promise<void>;
   isSyncPaused: boolean;
@@ -233,6 +348,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isAdminOpenRef = useRef<boolean>(false);
   isAdminOpenRef.current = isAdminOpen;
 
+  const isOrderModalOpenRef = useRef<boolean>(false);
+  isOrderModalOpenRef.current = isOrderModalOpen;
+
   const lastSyncTimestampRef = useRef<string>('');
   const isSyncingRef = useRef<boolean>(false);
 
@@ -240,7 +358,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Supports silent background updates, or forced manual syncs
   const syncLatestData = useCallback(async (silent = true, force = false) => {
     // If background sync is paused and not forced, do nothing
-    if (silent && isSyncPausedRef.current && !force) {
+    if (silent && (isSyncPausedRef.current || isOrderModalOpenRef.current) && !force) {
       return;
     }
 
@@ -422,6 +540,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const msg: WebSocketMessage = JSON.parse(event.data);
           if (msg.type === 'INIT_DATA' || msg.type === 'SYNC_DATA') {
+            if (isSyncPausedRef.current || isOrderModalOpenRef.current) return;
             const normalized = safeNormalizeData(msg.payload);
             const currentStr = JSON.stringify(dataRef.current);
             const nextStr = JSON.stringify(normalized);
@@ -495,6 +614,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         broadcastChannelRef.current = bc;
 
         bc.onmessage = (event) => {
+          if (isOrderModalOpenRef.current) return; // Jeda saat form aktif
+
           if (event.data && event.data.type === 'DATA_UPDATED' && event.data.payload) {
             const updated = safeNormalizeData(event.data.payload);
             if (JSON.stringify(dataRef.current) !== JSON.stringify(updated)) {
@@ -523,6 +644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Storage event listener fallback for browsers/tabs
     const handleStorageChange = (e: StorageEvent) => {
+      if (isOrderModalOpenRef.current) return; // Jeda saat form aktif
       if (e.key === 'akardaya_app_data' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
@@ -542,12 +664,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 3. Auto sync when user returns / focuses the browser tab
     const handleFocus = () => {
-      if (!isSyncPausedRef.current) {
+      if (!isSyncPausedRef.current && !isOrderModalOpenRef.current) {
         syncLatestDataRef.current(true);
       }
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isSyncPausedRef.current) {
+      if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isOrderModalOpenRef.current) {
         syncLatestDataRef.current(true);
       }
     };
@@ -556,7 +678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4. Background polling timer (Every 15 seconds) to fetch spreadsheet updates across all users
     const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible' && !isSyncPausedRef.current) {
+      if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isOrderModalOpenRef.current) {
         syncLatestDataRef.current(true);
       }
     }, 15000);
@@ -722,9 +844,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Submit order lead
-  const submitOrder = async (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>): Promise<boolean> => {
+  const submitOrder = async (order: Omit<OrderLead, 'id' | 'createdAt' | 'status'>): Promise<OrderLead | null> => {
     const newOrder: OrderLead = {
-      id: `lead-${Date.now()}`,
+      id: `ORD-${Date.now().toString().slice(-6)}`,
       ...order,
       createdAt: new Date().toISOString(),
       status: 'PENDING',
@@ -787,11 +909,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               clientName: newOrder.customerName,
               phone: newOrder.whatsapp,
               packageName: newOrder.selectedPackageName,
-              channel: newOrder.estimatedBudget,
+              channel: newOrder.channelName ? `${newOrder.campaignType || ''} - ${newOrder.channelName}` : newOrder.estimatedBudget,
               businessName: newOrder.businessName || '',
               targetCityOrArea: newOrder.targetCityOrArea || '',
               status: 'PENDING',
-              notes: newOrder.notes || '',
+              notes: newOrder.notes || (newOrder.totalPayment ? `Estimasi Bayar: Rp ${newOrder.totalPayment.toLocaleString('id-ID')}` : ''),
             },
           }),
         });
@@ -811,8 +933,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Ignore static network errors
     }
 
-    showToast('🚀 Permintaan Anda tercatat. Menghubungkan ke WhatsApp...', 'success');
-    return true;
+    showToast('🚀 Pesanan berhasil dibuat! Silakan selesaikan pembayaran.', 'success');
+    return newOrder;
   };
 
   // Reset to defaults

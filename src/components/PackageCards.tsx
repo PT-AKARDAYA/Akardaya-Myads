@@ -184,7 +184,7 @@ export const PackageCards: React.FC = () => {
                     </h3>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-base font-black text-slate-900 dark:text-white block leading-tight">
+                    <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white block leading-tight whitespace-nowrap">
                       {pkg.priceDisplay}
                     </span>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400">Nominal Paket</span>
@@ -206,10 +206,17 @@ export const PackageCards: React.FC = () => {
                       {pkg.accountType}
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold">
-                    <Coins className="w-3 h-3 text-amber-500" />
-                    Bonus Saldo s/d {data.discountConfig.reloadDiscountPercent}%
-                  </span>
+                  {pkg.category === 'ONE_KLIK' || pkg.id?.startsWith('one_klik') ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
+                      <Coins className="w-3 h-3 text-slate-400" />
+                      Tanpa Bonus Saldo
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold">
+                      <Coins className="w-3 h-3 text-amber-500" />
+                      Bonus Saldo s/d {data.discountConfig.reloadDiscountPercent}%
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
@@ -339,7 +346,11 @@ export const PackageCards: React.FC = () => {
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">
                             Nominal Budget Paket
                           </span>
-                          <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                          <span className={`font-black text-slate-900 dark:text-white tracking-tight whitespace-nowrap block ${
+                            pkg.priceDisplay.length > 18
+                              ? 'text-lg sm:text-xl'
+                              : 'text-2xl'
+                          }`}>
                             {pkg.priceDisplay}
                           </span>
                         </div>
@@ -374,7 +385,7 @@ export const PackageCards: React.FC = () => {
                               <span className="font-bold">
                                 {pkg.freeWebsiteMonths > 0
                                   ? `FREE Website Usaha (${pkg.freeWebsiteMonths} Bulan)`
-                                  : 'Free Website (Khusus tier >501k)'}
+                                  : 'Free Website (Khusus tier ≥500k)'}
                               </span>
                               {pkg.freeWebsiteMonths > 0 && (
                                 <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
@@ -438,7 +449,7 @@ export const PackageCards: React.FC = () => {
                             }`}
                           >
                             <Send className="w-3.5 h-3.5" />
-                            <span>Pilih {pkg.name.split(' ')[0]} Ini</span>
+                            <span>Pilih {pkg.name}</span>
                           </button>
                         </div>
                       </div>
@@ -515,8 +526,12 @@ export const PackageCards: React.FC = () => {
                     <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">
                       Nominal / Budget Paket
                     </span>
-                    <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    <div className="flex items-baseline gap-1 mt-0.5 min-w-0">
+                      <span className={`font-extrabold text-slate-900 dark:text-white tracking-tight whitespace-nowrap ${
+                        pkg.priceDisplay.length > 18
+                          ? 'text-xl sm:text-2xl xl:text-[1.65rem]'
+                          : 'text-2xl sm:text-3xl'
+                      }`}>
                         {pkg.priceDisplay}
                       </span>
                     </div>
@@ -554,7 +569,7 @@ export const PackageCards: React.FC = () => {
                         <span className="font-semibold">
                           {pkg.freeWebsiteMonths > 0
                             ? `FREE Website Usaha (${pkg.freeWebsiteMonths} Bulan)`
-                            : 'Free Website (Khusus tier >501k)'}
+                            : 'Free Website (Khusus tier ≥500k)'}
                         </span>
                         {pkg.freeWebsiteMonths > 0 && (
                           <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
@@ -614,7 +629,11 @@ export const PackageCards: React.FC = () => {
                         {pkg.description}
                       </p>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-                        <p>• Bonus top-up saldo berlaku otomatis (s/d {data.discountConfig.reloadDiscountPercent}%)</p>
+                        {pkg.category === 'ONE_KLIK' || pkg.id?.startsWith('one_klik') ? (
+                          <p>• Layanan terima jadi praktis (tanpa bonus saldo)</p>
+                        ) : (
+                          <p>• Bonus top-up saldo berlaku otomatis (s/d {data.discountConfig.reloadDiscountPercent}%)</p>
+                        )}
                         <p>• Pelaporan impresi/delivery rate transparan</p>
                         <p>• Pendampingan setup target audiens</p>
                       </div>
@@ -642,7 +661,7 @@ export const PackageCards: React.FC = () => {
                       }`}
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>Pilih {pkg.name.split(' ')[0]} Ini</span>
+                      <span>Pilih {pkg.name}</span>
                     </button>
                   </div>
                 </div>

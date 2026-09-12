@@ -718,6 +718,7 @@ export const AdCostCalculator: React.FC = () => {
                   <li>Saldo utama 100% utuh tanpa potongan administrasi apapun.</li>
                   <li>Bonus monetary sebesar Rp {bonusMonetary.toLocaleString('id-ID')} langsung ditambahkan ke akun MyAds.</li>
                   <li>Bisa digunakan lintas saluran (SMS LBA, Broadcast, Targeted, MMS, USSD, WA WABA).</li>
+                  <li className="text-slate-500 dark:text-slate-400">Bonus saldo berlaku untuk Top-Up Mandiri, UMKM & Corporate (Paket One Klik adalah layanan terima jadi tanpa bonus saldo).</li>
                 </ul>
               </div>
 

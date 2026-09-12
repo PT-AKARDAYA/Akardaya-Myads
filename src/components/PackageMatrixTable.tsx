@@ -26,14 +26,14 @@ export const PackageMatrixTable: React.FC = () => {
   const [selectedMobileTier, setSelectedMobileTier] = useState<string>('one_3');
 
   const mobileTiers = [
-    { key: 'one_3', name: 'One Klik (>501k)', label: 'One Klik >501k', sub: 'Terpopuler + Free Web', isPopular: true },
-    { key: 'one_2', name: 'One Klik (201-500k)', label: 'One Klik 201-500k', sub: 'Terima Jadi' },
+    { key: 'one_3', name: 'One Klik (≥500k)', label: 'One Klik ≥500k', sub: 'Terpopuler + Free Web', isPopular: true },
+    { key: 'one_2', name: 'One Klik (200-499k)', label: 'One Klik 200-499k', sub: 'Terima Jadi' },
     { key: 'one_1', name: 'One Klik (<200k)', label: 'One Klik <200k', sub: 'Hemat Starter' },
-    { key: 'man_3', name: 'Mandiri (>501k)', label: 'Mandiri >501k', sub: 'Kelola Bebas + Free Web' },
-    { key: 'man_2', name: 'Mandiri (201-500k)', label: 'Mandiri 201-500k', sub: 'Kelola Mandiri' },
+    { key: 'man_3', name: 'Mandiri (≥500k)', label: 'Mandiri ≥500k', sub: 'Kelola Bebas + Free Web' },
+    { key: 'man_2', name: 'Mandiri (200-499k)', label: 'Mandiri 200-499k', sub: 'Kelola Mandiri' },
     { key: 'man_1', name: 'Mandiri (<200k)', label: 'Mandiri <200k', sub: 'Starter Mandiri' },
-    { key: 'umkm', name: 'Paket UMKM (>500k)', label: 'UMKM >500k', sub: 'Free Web & Konten' },
-    { key: 'corp', name: 'Corporate (>1 Jt)', label: 'Corporate >1 Jt', sub: 'Fasilitas Prioritas' },
+    { key: 'umkm', name: 'Paket UMKM (≥500k)', label: 'UMKM ≥500k', sub: 'Free Web & Konten' },
+    { key: 'corp', name: 'Corporate (≥1 Jt)', label: 'Corporate ≥1 Jt', sub: 'Fasilitas Prioritas' },
   ];
 
   const rows = [
@@ -354,6 +354,22 @@ export const PackageMatrixTable: React.FC = () => {
         corp: 'SESUAI PAKET',
       },
     },
+
+    // BONUS SALDO ISI ULANG
+    {
+      facility: 'BONUS SALDO ISI ULANG',
+      feature: 'PROMO MONETARY',
+      customText: {
+        one_1: 'TIDAK ADA',
+        one_2: 'TIDAK ADA',
+        one_3: 'TIDAK ADA',
+        man_1: `s/d ${discountConfig.reloadDiscountPercent}%`,
+        man_2: `s/d ${discountConfig.reloadDiscountPercent}%`,
+        man_3: `s/d ${discountConfig.reloadDiscountPercent}%`,
+        umkm: `s/d ${discountConfig.reloadDiscountPercent}%`,
+        corp: `s/d ${discountConfig.reloadDiscountPercent}%`,
+      },
+    },
   ];
 
   const filteredRows = rows.filter((r) => {
@@ -601,17 +617,17 @@ export const PackageMatrixTable: React.FC = () => {
                   
                   {/* One Klik Tiers */}
                   <th className="p-2 text-center border-l border-amber-300/40">&lt;200.000</th>
-                  <th className="p-2 text-center">201.000 - 500.000</th>
-                  <th className="p-2 text-center">&gt;501.000</th>
+                  <th className="p-2 text-center">200.000 - 499.999</th>
+                  <th className="p-2 text-center">≥ 500.000</th>
 
                   {/* Mandiri Tiers */}
                   <th className="p-2 text-center border-l border-amber-300/40">&lt;200.000</th>
-                  <th className="p-2 text-center">201.000 - 500.000</th>
-                  <th className="p-2 text-center">&gt;501.000</th>
+                  <th className="p-2 text-center">200.000 - 499.999</th>
+                  <th className="p-2 text-center">≥ 500.000</th>
 
                   {/* UMKM & Corporate */}
-                  <th className="p-2 text-center border-l border-amber-300/40">&gt;500.000</th>
-                  <th className="p-2 text-center border-l border-amber-300/40">&gt;1000.000</th>
+                  <th className="p-2 text-center border-l border-amber-300/40">≥ 500.000</th>
+                  <th className="p-2 text-center border-l border-amber-300/40">≥ 1.000.000</th>
 
                   {/* Bonus Saldo Isi Ulang Column */}
                   <th className="p-2 text-center border-l border-amber-300/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-extrabold">
@@ -626,7 +642,8 @@ export const PackageMatrixTable: React.FC = () => {
                     row.facility.includes('GRATIS KONTEN') ||
                     row.facility.includes('FREE WEBSITE') ||
                     row.facility.includes('PEMBUATAN AKUN') ||
-                    row.facility.includes('SALDO MY ADS');
+                    row.facility.includes('SALDO MY ADS') ||
+                    row.facility.includes('BONUS SALDO');
 
                   return (
                     <tr
@@ -657,12 +674,16 @@ export const PackageMatrixTable: React.FC = () => {
 
                           if (row.customText) {
                             const val = (row.customText as any)[colKey];
+                            const isNoBonus = val === 'TIDAK ADA';
+                            const isBonus = val && val.includes('%');
                             return (
                               <td
                                 key={colKey}
                                 className={`p-2 text-center font-bold text-[11px] ${borderLeft} ${
-                                  val && val.includes('4X')
-                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                  val && val.includes('4X') || isBonus
+                                    ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
+                                    : isNoBonus
+                                    ? 'text-slate-400 dark:text-slate-500 font-medium'
                                     : 'text-slate-800 dark:text-slate-200'
                                 }`}
                               >

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const RateMatrixCatalog: React.FC = () => {
-  const { data } = useApp();
+  const { data, openOrderModalForPackage } = useApp();
   const [selectedFacility, setSelectedFacility] = useState<string>('ALL');
 
   const facilityTabs = [
@@ -161,6 +161,15 @@ export const RateMatrixCatalog: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => openOrderModalForPackage(null)}
+                className="mt-3 w-full py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:hover:bg-blue-600 text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+              >
+                <Send className="w-3 h-3" />
+                <span>Pesan Media Ini</span>
+              </button>
             </div>
           ))}
         </div>

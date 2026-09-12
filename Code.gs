@@ -91,7 +91,8 @@ function setupSheets() {
     const s = ss.insertSheet(SHEET_CONFIG);
     s.appendRow([
       "NAMA_BRAND", "TAGLINE", "NO_WHATSAPP", "TAMPILAN_NO_WA", "EMAIL_SUPPORT",
-      "ALAMAT_KANTOR", "JAM_OPERASIONAL", "TEKS_PENGUMUMAN", "TAMPILKAN_PENGUMUMAN", "TERAKHIR_UPDATE"
+      "ALAMAT_KANTOR", "JAM_OPERASIONAL", "TEKS_PENGUMUMAN", "TAMPILKAN_PENGUMUMAN", "TERAKHIR_UPDATE",
+      "NAMA_BANK", "NO_REKENING", "ATAS_NAMA", "PANDUAN_PEMBAYARAN"
     ]);
     s.setFrozenRows(1);
     formatHeader(s, "#D97706"); // Amber header
@@ -446,7 +447,11 @@ function readAllSheets(ss) {
       officeAddress: String(r[5] || ""),
       operatingHours: String(r[6] || ""),
       announcementText: String(r[7] || ""),
-      showAnnouncement: String(r[8]).toUpperCase() === "YA" || r[8] === true
+      showAnnouncement: String(r[8]).toUpperCase() === "YA" || r[8] === true,
+      bankName: r[10] ? String(r[10]) : undefined,
+      bankAccountNumber: r[11] ? String(r[11]) : undefined,
+      bankAccountHolder: r[12] ? String(r[12]) : undefined,
+      paymentInstructions: r[13] ? String(r[13]) : undefined
     };
   }
 
@@ -1056,7 +1061,7 @@ function saveAllSheets(ss, data) {
       s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
     }
     const c = data.companyConfig;
-    s.getRange(2, 1, 1, 10).setValues([[
+    s.getRange(2, 1, 1, 14).setValues([[
       c.brandName || "",
       c.brandTagline || "",
       c.waNumber || "",
@@ -1066,7 +1071,11 @@ function saveAllSheets(ss, data) {
       c.operatingHours || "",
       c.announcementText || "",
       c.showAnnouncement ? "YA" : "TIDAK",
-      now
+      now,
+      c.bankName || "",
+      c.bankAccountNumber || "",
+      c.bankAccountHolder || "",
+      c.paymentInstructions || ""
     ]]);
   }
 

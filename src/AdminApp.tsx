@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from './context/AppContext';
-import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation } from './types';
+import { AppData, SubscriptionPackage, ChannelRate, Testimonial, OrderLead, OfficeLocation, BankAccount } from './types';
 import { AkarDayaLogo } from './components/AkarDayaLogo';
 import { VisitorAnalyticsDashboard } from './components/VisitorAnalyticsDashboard';
 import {
@@ -44,6 +44,8 @@ import {
   Edit3,
   Pause,
   Play,
+  CreditCard,
+  Star,
 } from 'lucide-react';
 import { Toast } from './components/Toast';
 
@@ -70,6 +72,25 @@ export const AdminApp: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'UNREAD' | 'PENDING' | 'CONTACTED' | 'COMPLETED'>('ALL');
   const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null);
+
+  // Bank Accounts Management States
+  const [isAddingBankAccount, setIsAddingBankAccount] = useState<boolean>(false);
+  const [editingBankAccountId, setEditingBankAccountId] = useState<string | null>(null);
+  const [bankAccountForm, setBankAccountForm] = useState<{
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    notes: string;
+    isPrimary: boolean;
+    isActive: boolean;
+  }>({
+    bankName: 'BCA (Bank Central Asia)',
+    accountNumber: '',
+    accountHolder: 'PT Akardaya Telekomunikasi Indonesia',
+    notes: '',
+    isPrimary: false,
+    isActive: true,
+  });
 
   // Check if draft has unsaved changes
   const isDirty = React.useMemo(() => {
@@ -232,9 +253,12 @@ export const AdminApp: React.FC = () => {
 
   // Package editing handlers
   const handlePackageChange = (id: string, field: keyof SubscriptionPackage, value: any) => {
+    const finalValue = typeof value === 'string'
+      ? value.replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/>\s*Rp/g, '≥ Rp').replace(/^>\s*/, '≥ ')
+      : value;
     setDraftData((prev) => ({
       ...prev,
-      packages: prev.packages.map((pkg) => (pkg.id === id ? { ...pkg, [field]: value } : pkg)),
+      packages: prev.packages.map((pkg) => (pkg.id === id ? { ...pkg, [field]: finalValue } : pkg)),
     }));
   };
 
@@ -350,6 +374,193 @@ export const AdminApp: React.FC = () => {
     { city: 'Denpasar, Bali', lat: -8.67045, lng: 115.21263 },
     { city: 'Makassar, Sulawesi Selatan', lat: -5.14766, lng: 119.43273 },
   ];
+
+  const POPULAR_BANKS = [
+    'BCA (Bank Central Asia)',
+    'Bank Mandiri',
+    'BRI (Bank Rakyat Indonesia)',
+    'BNI (Bank Negara Indonesia)',
+    'BSI (Bank Syariah Indonesia)',
+    'CIMB Niaga',
+    'Bank Permata',
+    'Bank Danamon',
+    'Bank Jago',
+    'SeaBank',
+    'QRIS (Semua E-Wallet / Mobile)',
+  ];
+
+  const handleOpenAddBankAccount = () => {
+    setEditingBankAccountId(null);
+    const existingAccounts = draftData.companyConfig.bankAccounts || [];
+    setBankAccountForm({
+      bankName: 'BCA (Bank Central Asia)',
+      accountNumber: '',
+      accountHolder: draftData.companyConfig.bankAccountHolder || 'PT Akardaya Telekomunikasi Indonesia',
+      notes: '',
+      isPrimary: existingAccounts.length === 0,
+      isActive: true,
+    });
+    setIsAddingBankAccount(true);
+  };
+
+  const handleOpenEditBankAccount = (bank: BankAccount) => {
+    setEditingBankAccountId(bank.id);
+    setBankAccountForm({
+      bankName: bank.bankName,
+      accountNumber: bank.accountNumber,
+      accountHolder: bank.accountHolder,
+      notes: bank.notes || '',
+      isPrimary: Boolean(bank.isPrimary),
+      isActive: bank.isActive !== false,
+    });
+    setIsAddingBankAccount(true);
+  };
+
+  const handleSaveBankAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankAccountForm.bankName.trim() || !bankAccountForm.accountNumber.trim()) {
+      alert('Nama bank dan nomor rekening wajib diisi.');
+      return;
+    }
+
+    setDraftData((prev) => {
+      const currentList: BankAccount[] = (prev.companyConfig.bankAccounts && prev.companyConfig.bankAccounts.length > 0)
+        ? [...prev.companyConfig.bankAccounts]
+        : [
+            {
+              id: 'bank-default-1',
+              bankName: prev.companyConfig.bankName || 'BCA (Bank Central Asia)',
+              accountNumber: prev.companyConfig.bankAccountNumber || '0188-3333-7157',
+              accountHolder: prev.companyConfig.bankAccountHolder || 'PT Akardaya Telekomunikasi Indonesia',
+              isPrimary: true,
+              isActive: true,
+              notes: 'Rekening Utama',
+            },
+          ];
+
+      const isNewPrimary = bankAccountForm.isPrimary || currentList.length === 0;
+      let updatedList: BankAccount[];
+
+      if (editingBankAccountId) {
+        updatedList = currentList.map((b) => {
+          if (b.id === editingBankAccountId) {
+            return {
+              ...b,
+              bankName: bankAccountForm.bankName.trim(),
+              accountNumber: bankAccountForm.accountNumber.trim(),
+              accountHolder: bankAccountForm.accountHolder.trim() || 'PT Akardaya Telekomunikasi Indonesia',
+              notes: bankAccountForm.notes.trim(),
+              isPrimary: isNewPrimary,
+              isActive: bankAccountForm.isActive,
+            };
+          }
+          return isNewPrimary ? { ...b, isPrimary: false } : b;
+        });
+      } else {
+        const newBank: BankAccount = {
+          id: `bank-${Date.now()}`,
+          bankName: bankAccountForm.bankName.trim(),
+          accountNumber: bankAccountForm.accountNumber.trim(),
+          accountHolder: bankAccountForm.accountHolder.trim() || 'PT Akardaya Telekomunikasi Indonesia',
+          notes: bankAccountForm.notes.trim(),
+          isPrimary: isNewPrimary,
+          isActive: bankAccountForm.isActive,
+        };
+        const resetOldPrimary = isNewPrimary ? currentList.map((b) => ({ ...b, isPrimary: false })) : currentList;
+        updatedList = [...resetOldPrimary, newBank];
+      }
+
+      // Ensure at least one primary
+      if (!updatedList.some((b) => b.isPrimary) && updatedList.length > 0) {
+        updatedList[0].isPrimary = true;
+      }
+
+      const primaryBank = updatedList.find((b) => b.isPrimary) || updatedList[0];
+
+      return {
+        ...prev,
+        companyConfig: {
+          ...prev.companyConfig,
+          bankAccounts: updatedList,
+          bankName: primaryBank ? primaryBank.bankName : prev.companyConfig.bankName,
+          bankAccountNumber: primaryBank ? primaryBank.accountNumber : prev.companyConfig.bankAccountNumber,
+          bankAccountHolder: primaryBank ? primaryBank.accountHolder : prev.companyConfig.bankAccountHolder,
+        },
+      };
+    });
+
+    setIsAddingBankAccount(false);
+    setEditingBankAccountId(null);
+    showToast(editingBankAccountId ? 'Rekening bank berhasil diperbarui' : 'Rekening bank baru berhasil ditambahkan', 'SUCCESS');
+  };
+
+  const handleDeleteBankAccount = (id: string) => {
+    const currentList = draftData.companyConfig.bankAccounts || [];
+    if (currentList.length <= 1) {
+      alert('Minimal harus ada 1 rekening bank resmi terdaftar untuk pembayaran.');
+      return;
+    }
+    if (!window.confirm('Yakin ingin menghapus rekening bank ini?')) return;
+
+    setDraftData((prev) => {
+      const list = prev.companyConfig.bankAccounts || [];
+      const filtered = list.filter((b) => b.id !== id);
+      const hasPrimary = filtered.some((b) => b.isPrimary);
+      const updatedList = hasPrimary
+        ? filtered
+        : filtered.map((b, idx) => (idx === 0 ? { ...b, isPrimary: true } : b));
+
+      const primaryBank = updatedList.find((b) => b.isPrimary) || updatedList[0];
+
+      return {
+        ...prev,
+        companyConfig: {
+          ...prev.companyConfig,
+          bankAccounts: updatedList,
+          bankName: primaryBank ? primaryBank.bankName : prev.companyConfig.bankName,
+          bankAccountNumber: primaryBank ? primaryBank.accountNumber : prev.companyConfig.bankAccountNumber,
+          bankAccountHolder: primaryBank ? primaryBank.accountHolder : prev.companyConfig.bankAccountHolder,
+        },
+      };
+    });
+    showToast('Rekening bank telah dihapus', 'INFO');
+  };
+
+  const handleSetPrimaryBankAccount = (id: string) => {
+    setDraftData((prev) => {
+      const currentList = prev.companyConfig.bankAccounts || [];
+      const updatedList = currentList.map((b) => ({
+        ...b,
+        isPrimary: b.id === id,
+      }));
+      const primaryBank = updatedList.find((b) => b.isPrimary);
+      return {
+        ...prev,
+        companyConfig: {
+          ...prev.companyConfig,
+          bankAccounts: updatedList,
+          bankName: primaryBank ? primaryBank.bankName : prev.companyConfig.bankName,
+          bankAccountNumber: primaryBank ? primaryBank.accountNumber : prev.companyConfig.bankAccountNumber,
+          bankAccountHolder: primaryBank ? primaryBank.accountHolder : prev.companyConfig.bankAccountHolder,
+        },
+      };
+    });
+    showToast('Rekening utama berhasil diatur', 'SUCCESS');
+  };
+
+  const handleToggleActiveBankAccount = (id: string) => {
+    setDraftData((prev) => {
+      const currentList = prev.companyConfig.bankAccounts || [];
+      const updatedList = currentList.map((b) => (b.id === id ? { ...b, isActive: !b.isActive } : b));
+      return {
+        ...prev,
+        companyConfig: {
+          ...prev.companyConfig,
+          bankAccounts: updatedList,
+        },
+      };
+    });
+  };
 
   // Lead status handler
   const handleUpdateLeadStatus = (leadId: string, newStatus: 'PENDING' | 'CONTACTED' | 'COMPLETED') => {
@@ -1035,19 +1246,19 @@ export const AdminApp: React.FC = () => {
                           {(draftData.discountConfig.monetaryTiers || []).map((tier, index) => (
                             <tr key={tier.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
                               <td className="py-2 px-2">
-                                <input
-                                  type="text"
-                                  value={tier.label}
-                                  onChange={(e) => {
-                                    const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
-                                    newTiers[index].label = e.target.value;
-                                    setDraftData((prev) => ({
-                                      ...prev,
-                                      discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
-                                    }));
-                                  }}
-                                  className="w-full px-2 py-1.5 text-xs font-bold rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-                                />
+                                  <input
+                                    type="text"
+                                    value={tier.label}
+                                    onChange={(e) => {
+                                      const newTiers = [...(draftData.discountConfig.monetaryTiers || [])];
+                                      newTiers[index].label = e.target.value.replace(/>=/g, '≥').replace(/<=/g, '≤');
+                                      setDraftData((prev) => ({
+                                        ...prev,
+                                        discountConfig: { ...prev.discountConfig, monetaryTiers: newTiers }
+                                      }));
+                                    }}
+                                    className="w-full px-2 py-1.5 text-xs font-bold rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                                  />
                               </td>
                               <td className="py-2 px-2 text-center">
                                 <input
@@ -1605,6 +1816,318 @@ export const AdminApp: React.FC = () => {
                   placeholder="Teks pengumuman promosi..."
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
+              </div>
+
+              {/* Pengaturan Rekening Pembayaran Resmi (Multi-Rekening) */}
+              <div className="pt-5 mt-5 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>Pengaturan Rekening Bank Pembayaran</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          {(draftData.companyConfig.bankAccounts || []).length} Rekening Terdaftar
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Kelola nomor rekening resmi untuk pembayaran iklan. Pemesan dapat memilih rekening dan menyalin nomor secara instan.
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isAddingBankAccount && (
+                    <button
+                      type="button"
+                      id="btn-admin-add-bank-account"
+                      onClick={handleOpenAddBankAccount}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Tambah Rekening Baru</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* FORM TAMBAH / EDIT REKENING */}
+                {isAddingBankAccount && (
+                  <form
+                    onSubmit={handleSaveBankAccount}
+                    className="p-4 sm:p-5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border-2 border-emerald-500/40 dark:border-emerald-500/30 mb-5 animate-in fade-in slide-in-from-top-2"
+                  >
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-emerald-200 dark:border-emerald-800/60">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                          {editingBankAccountId ? 'Edit Data Rekening Bank' : 'Tambah Rekening Bank Baru'}
+                        </h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingBankAccount(false);
+                          setEditingBankAccountId(null);
+                        }}
+                        className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-semibold"
+                      >
+                        Batal
+                      </button>
+                    </div>
+
+                    {/* Quick Bank Choice Chips */}
+                    <div className="mb-3">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Pilihan Cepat Bank / E-Wallet:
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {POPULAR_BANKS.map((bName) => (
+                          <button
+                            key={bName}
+                            type="button"
+                            onClick={() => setBankAccountForm((prev) => ({ ...prev, bankName: bName }))}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border ${
+                              bankAccountForm.bankName === bName
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {bName.split(' ')[0]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs mb-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Nama Bank / Metode Transfer <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Contoh: BCA (Bank Central Asia)"
+                          value={bankAccountForm.bankName}
+                          onChange={(e) => setBankAccountForm((prev) => ({ ...prev, bankName: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Nomor Rekening <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Contoh: 0188-3333-7157"
+                          value={bankAccountForm.accountNumber}
+                          onChange={(e) => setBankAccountForm((prev) => ({ ...prev, accountNumber: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-emerald-600 dark:text-emerald-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Atas Nama Rekening <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Contoh: PT Akardaya Telekomunikasi Indonesia"
+                          value={bankAccountForm.accountHolder}
+                          onChange={(e) => setBankAccountForm((prev) => ({ ...prev, accountHolder: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mb-3 text-xs">
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Catatan / Fasilitas Transfer (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: Menerima transfer dari seluruh bank (BI-FAST / Realtime Online)"
+                        value={bankAccountForm.notes}
+                        onChange={(e) => setBankAccountForm((prev) => ({ ...prev, notes: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-emerald-200/80 dark:border-emerald-800/40">
+                      <div className="flex flex-wrap items-center gap-4 text-xs">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={bankAccountForm.isPrimary}
+                            onChange={(e) => setBankAccountForm((prev) => ({ ...prev, isPrimary: e.target.checked }))}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            Jadikan Rekening Utama (Default)
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={bankAccountForm.isActive}
+                            onChange={(e) => setBankAccountForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-slate-700 dark:text-slate-300">
+                            Status Aktif (Ditampilkan ke Pemesan)
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingBankAccount(false);
+                            setEditingBankAccountId(null);
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{editingBankAccountId ? 'Simpan Perubahan Rekening' : 'Tambahkan Rekening'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                {/* DAFTAR REKENING BANK TERDAFTAR */}
+                <div className="space-y-2.5 mb-4">
+                  {(draftData.companyConfig.bankAccounts || []).map((account, index) => {
+                    const isPrimary = Boolean(account.isPrimary);
+                    const isActive = account.isActive !== false;
+
+                    return (
+                      <div
+                        key={account.id || index}
+                        className={`p-3.5 sm:p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isPrimary
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 shadow-xs'
+                            : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700'
+                        } ${!isActive ? 'opacity-60 bg-slate-50 dark:bg-slate-900/50' : ''}`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-black text-slate-900 dark:text-white">
+                              {account.bankName}
+                            </span>
+                            {isPrimary && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 flex items-center gap-1">
+                                <Star className="w-3 h-3 fill-emerald-600 dark:fill-emerald-400 text-emerald-600 dark:text-emerald-400" />
+                                <span>Rekening Utama</span>
+                              </span>
+                            )}
+                            {!isActive && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                Nonaktif
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <div className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                              {account.accountNumber}
+                            </div>
+                            <span className="text-slate-400">•</span>
+                            <div className="text-slate-700 dark:text-slate-300 font-semibold">
+                              a/n {account.accountHolder}
+                            </div>
+                          </div>
+
+                          {account.notes && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                              💡 {account.notes}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-center shrink-0">
+                          {!isPrimary && isActive && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryBankAccount(account.id)}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
+                              title="Jadikan sebagai rekening utama"
+                            >
+                              <Star className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Jadikan Utama</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActiveBankAccount(account.id)}
+                            className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+                              isActive
+                                ? 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                                : 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                            }`}
+                            title={isActive ? 'Nonaktifkan rekening ini' : 'Aktifkan rekening ini'}
+                          >
+                            {isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditBankAccount(account)}
+                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-all"
+                            title="Edit rekening"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBankAccount(account.id)}
+                            disabled={(draftData.companyConfig.bankAccounts || []).length <= 1}
+                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Hapus rekening"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Panduan Instruksi Pembayaran */}
+                <div className="text-xs pt-2">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Panduan / Instruksi Pembayaran (Muncul di Layar Selesai Order):
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Contoh: Silakan transfer sesuai estimasi total tagihan ke rekening resmi di atas. Setelah transfer, kirim bukti transfer ke WhatsApp admin untuk verifikasi..."
+                    value={draftData.companyConfig.paymentInstructions || ''}
+                    onChange={(e) =>
+                      setDraftData((prev) => ({
+                        ...prev,
+                        companyConfig: { ...prev.companyConfig, paymentInstructions: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    💡 Petunjuk ini akan langsung terbaca oleh pelanggan bersama nomor rekening resmi begitu mereka menekan tombol <strong>Kirim Pesanan</strong>.
+                  </p>
+                </div>
               </div>
             </div>
           )}
