@@ -4,6 +4,7 @@ import { Navbar } from './components/Navbar';
 import { HeroPromo } from './components/HeroPromo';
 import { PackageCards } from './components/PackageCards';
 import { FloatingCSButton } from './components/FloatingCSButton';
+import { FloatingOfficeButton } from './components/FloatingOfficeButton';
 import { OrderModal } from './components/OrderModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Footer } from './components/Footer';
@@ -114,6 +115,7 @@ const MainLayout: React.FC = () => {
       <Footer />
       <MobileBottomNav />
       <FloatingCSButton />
+      <FloatingOfficeButton />
 
       {/* Modals are hidden by default, perfect for lazy loading */}
       <OrderModal />
