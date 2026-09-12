@@ -2,6 +2,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { trackRealVisitor } from '../utils/analyticsTracker';
 import { SubscriptionPackage, OrderLead, ChannelRate, BankAccount } from '../types';
+import { GpsLocationMapPickerModal } from './GpsLocationMapPickerModal';
+import {
+  DAFTAR_PROVINSI,
+  DAFTAR_KOTA,
+  DAFTAR_KECAMATAN,
+  DAFTAR_KELURAHAN,
+} from '../data/wilayahIndonesia';
 import {
   X,
   PhoneCall,
@@ -31,6 +38,28 @@ import {
   TrendingUp,
   Percent,
   Star,
+  Calendar,
+  MessageSquare,
+  Globe,
+  Tag,
+  Compass,
+  Navigation,
+  Heart,
+  Sliders,
+  DollarSign,
+  Layers,
+  ShoppingBag,
+  Briefcase,
+  Smile,
+  FileSpreadsheet,
+  UploadCloud,
+  FileText,
+  Download,
+  Trash2,
+  Paperclip,
+  FileCheck,
+  CheckSquare,
+  Landmark,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -99,6 +128,138 @@ export const OrderModal: React.FC = () => {
   const [businessName, setBusinessName] = useState<string>('');
   const [targetCityOrArea, setTargetCityOrArea] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  // LBA GPS States
+  const [isMapModalOpen, setIsMapModalOpen] = useState<boolean>(false);
+  const [gpsLatitude, setGpsLatitude] = useState<number | undefined>(undefined);
+  const [gpsLongitude, setGpsLongitude] = useState<number | undefined>(undefined);
+  const [gpsRadiusMeters, setGpsRadiusMeters] = useState<number>(1000);
+  const [streetAddress, setStreetAddress] = useState<string>('');
+
+  // Campaign Parameters (H+3 Date, 160 chars message, web link, sender name)
+  const [broadcastDate, setBroadcastDate] = useState<string>('');
+  const [adMessageContent, setAdMessageContent] = useState<string>('');
+  const [webLink, setWebLink] = useState<string>('');
+  const [senderName, setSenderName] = useState<string>('');
+
+  // TARGETED Hierarchical Indonesian Administrative Region States
+  const [targetProvinceId, setTargetProvinceId] = useState<string>('p_jatim');
+  const [targetCityId, setTargetCityId] = useState<string>('k_gresik');
+  const [targetDistrictId, setTargetDistrictId] = useState<string>('');
+  const [targetVillageId, setTargetVillageId] = useState<string>('');
+  const [targetAgeGroup, setTargetAgeGroup] = useState<string>('Semua Rentang Usia');
+  const [targetReligion, setTargetReligion] = useState<string>('Semua Agama');
+  const [targetGender, setTargetGender] = useState<string>('Semua Gender (Pria & Wanita)');
+  const [targetArpuSpending, setTargetArpuSpending] = useState<string>('Semua ARPU (Standard)');
+  const [targetSes, setTargetSes] = useState<string>('Semua SES (Mass Market)');
+  const [targetDeviceOs, setTargetDeviceOs] = useState<string>('Semua Device & OS');
+  const [targetMaritalStatus, setTargetMaritalStatus] = useState<string>('Semua Status');
+  const [targetInterests, setTargetInterests] = useState<string[]>([
+    'Belanja Online & E-Commerce',
+  ]);
+  const [customInterestInput, setCustomInterestInput] = useState<string>('');
+
+  // BROADCAST File Upload State (Excel / CSV customer list)
+  const [uploadedListFileName, setUploadedListFileName] = useState<string>('');
+  const [uploadedListFileCount, setUploadedListFileCount] = useState<number | undefined>(undefined);
+  const [uploadedListFileSize, setUploadedListFileSize] = useState<string>('');
+  const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProcessFile = (file: File) => {
+    if (!file) return;
+    const name = file.name;
+    const sizeKB = (file.size / 1024).toFixed(1) + ' KB';
+    setUploadedListFileName(name);
+    setUploadedListFileSize(sizeKB);
+
+    if (name.toLowerCase().endsWith('.csv') || name.toLowerCase().endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = (e.target?.result as string) || '';
+        if (text) {
+          const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
+          const count = lines.length > 1 && (lines[0].toLowerCase().includes('nomor') || lines[0].toLowerCase().includes('phone') || lines[0].toLowerCase().includes('hp') || lines[0].toLowerCase().includes('kontak'))
+            ? lines.length - 1
+            : lines.length;
+          setUploadedListFileCount(count);
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      setUploadedListFileCount(undefined);
+    }
+  };
+
+  const handleRemoveUploadedFile = () => {
+    setUploadedListFileName('');
+    setUploadedListFileCount(undefined);
+    setUploadedListFileSize('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadSampleCsv = () => {
+    const csvContent = 'data:text/csv;charset=utf-8,Nomor_HP,Nama_Penerima,Kota\n081234567890,Budi Santoso,Surabaya\n085712345678,Siti Nurhaliza,Gresik\n089612345678,Ahmad Dahlan,Jakarta\n087812345678,Dewi Lestari,Bandung';
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', 'template_list_broadcast_nomor.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Filtered Wilayah Lists based on hierarchy selection
+  const filteredKotaList = useMemo(() => {
+    if (!targetProvinceId) return DAFTAR_KOTA;
+    return DAFTAR_KOTA.filter((k) => k.provinsiId === targetProvinceId);
+  }, [targetProvinceId]);
+
+  const filteredKecamatanList = useMemo(() => {
+    if (!targetCityId) return [];
+    return DAFTAR_KECAMATAN.filter((kc) => kc.kotaId === targetCityId);
+  }, [targetCityId]);
+
+  const filteredKelurahanList = useMemo(() => {
+    if (!targetDistrictId) return [];
+    return DAFTAR_KELURAHAN.filter((kl) => kl.kecamatanId === targetDistrictId);
+  }, [targetDistrictId]);
+
+  // Derived selected names for labels
+  const selectedProvinceObj = useMemo(() => DAFTAR_PROVINSI.find((p) => p.id === targetProvinceId), [targetProvinceId]);
+  const selectedKotaObj = useMemo(() => DAFTAR_KOTA.find((k) => k.id === targetCityId), [targetCityId]);
+  const selectedKecamatanObj = useMemo(() => DAFTAR_KECAMATAN.find((kc) => kc.id === targetDistrictId), [targetDistrictId]);
+  const selectedKelurahanObj = useMemo(() => DAFTAR_KELURAHAN.find((kl) => kl.id === targetVillageId), [targetVillageId]);
+
+  // Formatted targeted administrative area text
+  const formattedTargetedAdministrativeArea = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedKelurahanObj) parts.push(`Kel. ${selectedKelurahanObj.nama}`);
+    if (selectedKecamatanObj) parts.push(`Kec. ${selectedKecamatanObj.nama}`);
+    if (selectedKotaObj) parts.push(selectedKotaObj.nama);
+    if (selectedProvinceObj) parts.push(selectedProvinceObj.nama);
+    return parts.length > 0 ? parts.join(', ') : 'Nasional / Seluruh Indonesia';
+  }, [selectedProvinceObj, selectedKotaObj, selectedKecamatanObj, selectedKelurahanObj]);
+
+  // Min broadcast date H+3
+  const minBroadcastDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  const minBroadcastDateFormatted = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }, []);
 
   // Submission & Result state
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -610,6 +771,21 @@ export const OrderModal: React.FC = () => {
     }, 2500);
   };
 
+  const handleSaveGpsLocation = (result: {
+    latitude: number;
+    longitude: number;
+    radiusMeters: number;
+    streetAddress: string;
+    cityName: string;
+    formattedTargetArea: string;
+  }) => {
+    setGpsLatitude(result.latitude);
+    setGpsLongitude(result.longitude);
+    setGpsRadiusMeters(result.radiusMeters);
+    setStreetAddress(result.streetAddress);
+    setTargetCityOrArea(result.formattedTargetArea);
+  };
+
   const handleCopySummary = () => {
     if (!createdOrder) return;
     const targetBank = currentBankAccount || {
@@ -630,6 +806,34 @@ export const OrderModal: React.FC = () => {
       `Saluran Media: ${createdOrder.channelName}\n` +
       `Estimasi Jangkauan: ~${createdOrder.estimatedReach?.toLocaleString('id-ID')} Penerima\n` +
       `Target Lokasi: ${createdOrder.targetCityOrArea || 'Nasional'}\n` +
+      (createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup
+        ? `--- KAPABILITAS TARGETING ---\n` +
+          `• Rentang Usia: ${createdOrder.targetAgeGroup || 'Semua Usia'}\n` +
+          `• Segmentasi Religi: ${createdOrder.targetReligion || 'Semua Agama'}\n` +
+          `• Jenis Kelamin: ${createdOrder.targetGender || 'Semua Gender'}\n` +
+          `• ARPU Spending: ${createdOrder.targetArpuSpending || 'Semua ARPU'}\n` +
+          `• Status SES: ${createdOrder.targetSes || 'Semua SES'}\n` +
+          `• Device & OS: ${createdOrder.targetDeviceOs || 'Semua Device'}\n` +
+          `• Status Pernikahan: ${createdOrder.targetMaritalStatus || 'Semua Status'}\n` +
+          (createdOrder.targetInterests && createdOrder.targetInterests.length > 0
+            ? `• Minat / Perilaku: ${createdOrder.targetInterests.join(', ')}\n`
+            : ''
+          )
+        : ''
+      ) +
+      (createdOrder.latitude && createdOrder.longitude
+        ? `Titik GPS & Radius: Lat: ${createdOrder.latitude}, Lng: ${createdOrder.longitude} (Radius: ${createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`})\n` +
+          (createdOrder.streetAddress ? `Alamat Jalan: ${createdOrder.streetAddress}\n` : '')
+        : ''
+      ) +
+      (createdOrder.uploadedListFileName
+        ? `File List Kontak: ${createdOrder.uploadedListFileName} (${createdOrder.uploadedListFileSize || ''}${createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount} Nomor` : ''})\n`
+        : ''
+      ) +
+      (createdOrder.broadcastDate ? `Tanggal Broadcast (H+3): ${createdOrder.broadcastDate}\n` : '') +
+      (createdOrder.senderName ? `Sender ID / Masking: ${createdOrder.senderName}\n` : '') +
+      (createdOrder.adMessageContent ? `Isi Pesan Iklan: "${createdOrder.adMessageContent}"\n` : '') +
+      (createdOrder.webLink ? `Link Web / Promo: ${createdOrder.webLink}\n` : '') +
       (isOneKlik
         ? `Bonus Saldo: Tidak Ada (Paket One Klik Terima Jadi)\n`
         : `Bonus Saldo: +${bonusPercent}%${bonusAmount > 0 ? ` (+Rp ${bonusAmount.toLocaleString('id-ID')})` : ''}\n` +
@@ -671,6 +875,10 @@ export const OrderModal: React.FC = () => {
           .map(ch => `${ch.facility} (${channelQuantities[ch.id] || 0} ${ch.unit})`)
           .join(', ');
 
+    const finalTargetCityOrArea = campaignType === 'TARGETED'
+      ? formattedTargetedAdministrativeArea
+      : (targetCityOrArea.trim() || 'Nasional / Seluruh Indonesia');
+
     const payload = {
       customerName: customerName.trim(),
       whatsapp: cleanWa,
@@ -678,13 +886,40 @@ export const OrderModal: React.FC = () => {
       selectedPackageId: currentPkg?.id || 'custom',
       selectedPackageName: currentPkg?.name || 'Paket Promosi Iklan',
       estimatedBudget: `Rp ${effectiveTotalPayment.toLocaleString('id-ID')}`,
-      targetCityOrArea: targetCityOrArea.trim() || 'Nasional / Seluruh Indonesia',
+      targetCityOrArea: finalTargetCityOrArea,
+      // Target Administrative breakdown for TARGETED
+      targetProvince: selectedProvinceObj?.nama,
+      targetCity: selectedKotaObj?.nama,
+      targetDistrict: selectedKecamatanObj?.nama,
+      targetVillage: selectedKelurahanObj?.nama,
       notes: notes.trim(),
       campaignType: isTopupPackage ? 'FLEXI TOP-UP' : campaignType,
       channelName: channelNames,
       channelRate: selectedChannelsList[0]?.ratePerUnit || 200, // Legacy fallback
       estimatedReach: effectiveReach,
       totalPayment: effectiveTotalPayment,
+      // Sasaran GPS LBA & Parameter Kampanye
+      latitude: gpsLatitude,
+      longitude: gpsLongitude,
+      radiusMeters: gpsRadiusMeters,
+      streetAddress: streetAddress.trim(),
+      broadcastDate: broadcastDate.trim(),
+      adMessageContent: adMessageContent.trim(),
+      webLink: webLink.trim(),
+      senderName: senderName.trim().toUpperCase(),
+      // 8 Kapabilitas Targeting
+      targetAgeGroup: targetAgeGroup.trim(),
+      targetReligion: targetReligion.trim(),
+      targetGender: targetGender.trim(),
+      targetArpuSpending: targetArpuSpending.trim(),
+      targetSes: targetSes.trim(),
+      targetDeviceOs: targetDeviceOs.trim(),
+      targetMaritalStatus: targetMaritalStatus.trim(),
+      targetInterests: targetInterests,
+      // Upload List Kontak Excel/CSV (BROADCAST)
+      uploadedListFileName: uploadedListFileName.trim(),
+      uploadedListFileCount: uploadedListFileCount,
+      uploadedListFileSize: uploadedListFileSize.trim(),
     };
 
     const newOrder = await submitOrder(payload);
@@ -738,13 +973,41 @@ export const OrderModal: React.FC = () => {
       `• Tipe Kampanye: *${createdOrder.campaignType}*\n` +
       `• Saluran Media: *${createdOrder.channelName}*\n` +
       `• Target Lokasi/Area: *${createdOrder.targetCityOrArea || 'Nasional'}*\n` +
+      (createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup
+        ? `\n🎯 *KAPABILITAS TARGETING*\n` +
+          `• Rentang Usia: *${createdOrder.targetAgeGroup || 'Semua Usia'}*\n` +
+          `• Segmentasi Religi: *${createdOrder.targetReligion || 'Semua Agama'}*\n` +
+          `• Jenis Kelamin: *${createdOrder.targetGender || 'Semua Gender'}*\n` +
+          `• ARPU Spending: *${createdOrder.targetArpuSpending || 'Semua ARPU'}*\n` +
+          `• Status SES: *${createdOrder.targetSes || 'Semua SES'}*\n` +
+          `• Device & OS: *${createdOrder.targetDeviceOs || 'Semua Device'}*\n` +
+          `• Status Pernikahan: *${createdOrder.targetMaritalStatus || 'Semua Status'}*\n` +
+          (createdOrder.targetInterests && createdOrder.targetInterests.length > 0
+            ? `• Minat & Perilaku: *${createdOrder.targetInterests.join(', ')}*\n`
+            : ''
+          ) + '\n'
+        : ''
+      ) +
+      (createdOrder.latitude && createdOrder.longitude
+        ? `• Titik GPS & Radius: *Lat: ${createdOrder.latitude}, Lng: ${createdOrder.longitude} (Radius: ${createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`})*\n` +
+          (createdOrder.streetAddress ? `• Alamat Jalan: *${createdOrder.streetAddress}*\n` : '')
+        : ''
+      ) +
+      (createdOrder.uploadedListFileName
+        ? `• File List Kontak: *${createdOrder.uploadedListFileName}* (${createdOrder.uploadedListFileSize || ''}${createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount} Nomor` : ''})\n`
+        : ''
+      ) +
+      (createdOrder.broadcastDate ? `• Tanggal Broadcast (H+3): *${createdOrder.broadcastDate}*\n` : '') +
+      (createdOrder.senderName ? `• Sender / Masking: *${createdOrder.senderName}*\n` : '') +
+      (createdOrder.adMessageContent ? `• Isi Pesan Iklan (160 char): *"${createdOrder.adMessageContent}"*\n` : '') +
+      (createdOrder.webLink ? `• Link Web/Promo: *${createdOrder.webLink}*\n` : '') +
       `• Estimasi Jangkauan: *~${createdOrder.estimatedReach?.toLocaleString('id-ID')} Penerima*\n` +
       (isOneKlik
         ? `• Bonus Saldo: *Tidak Ada (Paket One Klik Terima Jadi)*\n`
         : `• Bonus Saldo: *+${bonusPercent}%${bonusAmount > 0 ? ` (+Rp ${bonusAmount.toLocaleString('id-ID')})` : ''}*\n` +
           (bonusAmount > 0 ? `• Total Saldo Masuk Akun: *Rp ${(effectiveTotalSubtotal + bonusAmount).toLocaleString('id-ID')}*\n` : '')
       ) +
-      (createdOrder.notes ? `• Catatan: ${createdOrder.notes}\n\n` : '\n') +
+      (createdOrder.notes ? `• Catatan Khusus: ${createdOrder.notes}\n\n` : '\n') +
       `💳 *PEMBAYARAN RESMI*\n` +
       `• Total Transfer: *Rp ${createdOrder.totalPayment?.toLocaleString('id-ID')}*\n` +
       `• Bank Tujuan: *${targetBank.bankName}*\n` +
@@ -1545,32 +1808,718 @@ export const OrderModal: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Target Lokasi / Radius Toko</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <span>Target Lokasi / Sasaran Area</span>
+                      {campaignType === 'LBA' ? (
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                          Wajib Titik GPS LBA
+                        </span>
+                      ) : campaignType === 'TARGETED' ? (
+                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-900/40 px-1.5 py-0.5 rounded">
+                          Wilayah Administratif Nasional
+                        </span>
+                      ) : null}
+                    </label>
                     {campaignType === 'LBA' && (
-                      <span className="text-[10px] text-blue-600 font-bold">Wajib untuk LBA</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsMapModalOpen(true)}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 hover:underline transition-all"
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        <span>{gpsLatitude ? 'Ubah Titik GPS' : 'Pilih di Peta (GPS)'}</span>
+                      </button>
                     )}
-                  </label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  </div>
+
+                  {campaignType === 'TARGETED' ? (
+                    /* TARGETED: Pilih Provinsi, Kota, Kecamatan, Kelurahan (Data Wilayah Nasional) */
+                    <div className="space-y-2 p-3 bg-rose-50/50 dark:bg-slate-850/60 rounded-xl border border-rose-200/80 dark:border-rose-900/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                          <Landmark className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Pilihan Wilayah Sasaran Profiling:</span>
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">Data Nasional Kemendagri / BPS</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* 1. Provinsi */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                            Provinsi:
+                          </label>
+                          <select
+                            value={targetProvinceId}
+                            onChange={(e) => {
+                              const newProv = e.target.value;
+                              setTargetProvinceId(newProv);
+                              // Auto pick first kota for this prov
+                              const matchedKotas = DAFTAR_KOTA.filter(k => k.provinsiId === newProv);
+                              const defaultKotaId = matchedKotas[0]?.id || '';
+                              setTargetCityId(defaultKotaId);
+                              setTargetDistrictId('');
+                              setTargetVillageId('');
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                          >
+                            <option value="">Semua Provinsi (Nasional)</option>
+                            {DAFTAR_PROVINSI.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.nama}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 2. Kota / Kabupaten */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                            Kota / Kabupaten:
+                          </label>
+                          <select
+                            value={targetCityId}
+                            onChange={(e) => {
+                              const newKota = e.target.value;
+                              setTargetCityId(newKota);
+                              setTargetDistrictId('');
+                              setTargetVillageId('');
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                          >
+                            <option value="">Semua Kota/Kabupaten ({selectedProvinceObj?.nama || 'Nasional'})</option>
+                            {filteredKotaList.map((k) => (
+                              <option key={k.id} value={k.id}>
+                                {k.nama}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 3. Kecamatan */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                            Kecamatan:
+                          </label>
+                          <select
+                            value={targetDistrictId}
+                            onChange={(e) => {
+                              const newDistrict = e.target.value;
+                              setTargetDistrictId(newDistrict);
+                              setTargetVillageId('');
+                            }}
+                            disabled={!targetCityId}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500 disabled:opacity-50"
+                          >
+                            <option value="">Semua Kecamatan ({selectedKotaObj?.nama || 'Pilih Kota Terlebih Dahulu'})</option>
+                            {filteredKecamatanList.map((kc) => (
+                              <option key={kc.id} value={kc.id}>
+                                Kec. {kc.nama}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 4. Kelurahan / Desa */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                            Kelurahan / Desa:
+                          </label>
+                          <select
+                            value={targetVillageId}
+                            onChange={(e) => setTargetVillageId(e.target.value)}
+                            disabled={!targetDistrictId}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500 disabled:opacity-50"
+                          >
+                            <option value="">Semua Kelurahan ({selectedKecamatanObj ? `Kec. ${selectedKecamatanObj.nama}` : 'Pilih Kecamatan Terlebih Dahulu'})</option>
+                            {filteredKelurahanList.map((kl) => (
+                              <option key={kl.id} value={kl.id}>
+                                Kel. {kl.nama} {kl.kodePos ? `(${kl.kodePos})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Summary Tag Wilayah Terpilih */}
+                      <div className="pt-2 mt-1 border-t border-rose-200/60 dark:border-rose-900/40 flex items-center gap-1.5 text-[11px] text-slate-700 dark:text-slate-300">
+                        <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        <span className="text-slate-500 text-[10px]">Sasaran Terkonfigurasi:</span>
+                        <strong className="text-rose-700 dark:text-rose-400 font-bold truncate">
+                          {formattedTargetedAdministrativeArea}
+                        </strong>
+                      </div>
+                    </div>
+                  ) : (
+                    /* LBA / BROADCAST / DEFAULT VIEW */
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder={campaignType === 'LBA' ? 'Klik untuk memilih titik GPS di Peta & radius...' : 'Contoh: Kota Surabaya, Jawa Timur, atau Seluruh Indonesia'}
+                        value={targetCityOrArea}
+                        onClick={() => {
+                          if (campaignType === 'LBA' || !targetCityOrArea) {
+                            setIsMapModalOpen(true);
+                          }
+                        }}
+                        onChange={(e) => setTargetCityOrArea(e.target.value)}
+                        className={`w-full pl-9 ${campaignType === 'LBA' ? 'pr-24 cursor-pointer' : 'pr-3.5'} py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20`}
+                      />
+                      {campaignType === 'LBA' && (
+                        <button
+                          type="button"
+                          onClick={() => setIsMapModalOpen(true)}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center gap-1 shadow-xs"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          <span>Peta GPS</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* KAPABILITAS TARGETING KHUSUS (Tampil saat tipe kampanye TARGETED) */}
+              {campaignType === 'TARGETED' && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-50/90 via-slate-50 to-red-50/40 dark:from-slate-850 dark:via-slate-850 dark:to-rose-950/20 border-2 border-rose-500/30 dark:border-rose-500/30 shadow-xs space-y-4">
+                  {/* Header Objektif sesuai gambar referensi */}
+                  <div className="border-b border-rose-200/80 dark:border-rose-900/40 pb-3">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-md bg-rose-600 text-white text-[11px] font-black uppercase tracking-wider shadow-xs">
+                          TARGETED
+                        </span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                          <Target className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          <span>Kapabilitas Parameter Profiling Pelanggan</span>
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-950/60 px-2 py-0.5 rounded-full">
+                        8 Filter Aktif
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed bg-white/80 dark:bg-slate-800/80 p-2.5 rounded-xl border border-rose-100 dark:border-slate-700">
+                      <strong className="text-rose-700 dark:text-rose-400 block font-bold text-[11px] mb-0.5 uppercase tracking-wide">
+                        OBJEKTIF:
+                      </strong>
+                      Menjangkau pelanggan yang tepat berdasarkan minat dan perilaku yang relevan, ideal untuk penawaran produk spesifik.
+                    </div>
+                  </div>
+
+                  {/* 8 Grid Kartu Kapabilitas Targeting */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* 1. Grup Usia */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>1. Grup Usia (Rentang Umur)</span>
+                      </label>
+                      <select
+                        value={targetAgeGroup}
+                        onChange={(e) => setTargetAgeGroup(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua Rentang Usia">Semua Rentang Usia (Mass)</option>
+                        <option value="18 - 24 Tahun (Gen Z / Pelajar / First Jobber)">18 - 24 Tahun (Gen Z / Pelajar / First Jobber)</option>
+                        <option value="25 - 34 Tahun (Milenial / Profesional Muda)">25 - 34 Tahun (Milenial / Profesional Muda)</option>
+                        <option value="35 - 44 Tahun (Dewasa Mapan / Keluarga)">35 - 44 Tahun (Dewasa Mapan / Keluarga)</option>
+                        <option value="45+ Tahun (Mature / Senior)">45+ Tahun (Mature / Senior)</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Segmentasi umur target penerima</span>
+                    </div>
+
+                    {/* 2. Agama / Religi */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>2. Agama (Segmentasi Religi)</span>
+                      </label>
+                      <select
+                        value={targetReligion}
+                        onChange={(e) => setTargetReligion(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua Agama">Semua Agama (Nasional)</option>
+                        <option value="Islam / Muslim">Islam / Muslim (Mayoritas)</option>
+                        <option value="Kristen / Katolik">Kristen / Katolik</option>
+                        <option value="Hindu / Buddha">Hindu / Buddha</option>
+                        <option value="Momen Hari Raya Keagamaan Khusus">Momen Hari Raya Keagamaan Khusus</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Segmentasi religi / momen hari raya</span>
+                    </div>
+
+                    {/* 3. Jenis Kelamin */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>3. Jenis Kelamin (Gender)</span>
+                      </label>
+                      <select
+                        value={targetGender}
+                        onChange={(e) => setTargetGender(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua Gender (Pria & Wanita)">Semua Gender (Pria & Wanita)</option>
+                        <option value="Pria (Male Only)">Pria Saja (Male Only)</option>
+                        <option value="Wanita (Female Only)">Wanita Saja (Female Only)</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Filter jenis kelamin spesifik</span>
+                    </div>
+
+                    {/* 4. ARPU Spending */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>4. ARPU Spending (Pengeluaran Pulsa)</span>
+                      </label>
+                      <select
+                        value={targetArpuSpending}
+                        onChange={(e) => setTargetArpuSpending(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua ARPU (Standard)">Semua ARPU (Daya Beli Massal)</option>
+                        <option value="Low (< Rp 50.000 / Bulan)">Low (&lt; Rp 50.000 / Bulan)</option>
+                        <option value="Medium (Rp 50.000 - Rp 150.000 / Bulan)">Medium (Rp 50.000 - Rp 150.000 / Bulan)</option>
+                        <option value="High / VIP (> Rp 150.000 - Rp 500.000+ / Bulan)">High / VIP (&gt; Rp 150.000+ / Bulan)</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Tingkat pengeluaran telko per nomor</span>
+                    </div>
+
+                    {/* 5. Status SES */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>5. Status SES (Sosial Ekonomi)</span>
+                      </label>
+                      <select
+                        value={targetSes}
+                        onChange={(e) => setTargetSes(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua SES (Mass Market)">Semua SES (Mass Market)</option>
+                        <option value="SES A (Atas / High Net Worth / Premium)">SES A (Atas / High Net Worth / Premium)</option>
+                        <option value="SES B (Menengah ke Atas / Middle-Up)">SES B (Menengah ke Atas / Middle-Up)</option>
+                        <option value="SES C (Menengah / Mass Middle)">SES C (Menengah / Mass Middle)</option>
+                        <option value="SES D & E (Mass Basic)">SES D & E (Mass Basic)</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Kelas ekonomi dan daya beli profil</span>
+                    </div>
+
+                    {/* 6. Device & OS */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>6. Device & OS (Android / iOS / Tipe)</span>
+                      </label>
+                      <select
+                        value={targetDeviceOs}
+                        onChange={(e) => setTargetDeviceOs(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua Device & OS">Semua Device & Handphone</option>
+                        <option value="Android Only (Smartphone 4G/5G)">Android Smartphone (4G / 5G)</option>
+                        <option value="Apple iOS Only (iPhone Users)">Apple iOS (iPhone Users / Premium)</option>
+                        <option value="High-End Flagship Only">High-End Flagship Phones Only</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Tipe sistem operasi & perangkat target</span>
+                    </div>
+
+                    {/* 7. Pernikahan */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                        <Heart className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>7. Pernikahan (Lajang / Menikah)</span>
+                      </label>
+                      <select
+                        value={targetMaritalStatus}
+                        onChange={(e) => setTargetMaritalStatus(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="Semua Status">Semua Status Pernikahan</option>
+                        <option value="Lajang / Single">Lajang / Single / Belum Menikah</option>
+                        <option value="Menikah / Berkeluarga">Menikah / Berkeluarga</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Status marital sasaran audiens</span>
+                    </div>
+
+                    {/* 8. Minat / Perilaku */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs sm:col-span-2">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <ShoppingBag className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                          <span>8. Minat / Perilaku (Hobi & Gaya Hidup)</span>
+                        </label>
+                        <span className="text-[10px] text-slate-400">
+                          {targetInterests.length} Kategori Dipilih
+                        </span>
+                      </div>
+
+                      {/* Interactive Interest Chips */}
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {[
+                          '🛒 Belanja Online & E-Commerce',
+                          '🍔 Kuliner & Makanan (F&B)',
+                          '🚗 Otomotif & Kendaraan',
+                          '💼 Bisnis & Investasi / Finansial',
+                          '💄 Kecantikan & Fashion',
+                          '🏠 Properti & Hunian',
+                          '🎮 Gaming & Hiburan Digital',
+                          '✈️ Travel & Liburan',
+                          '👶 Ibu & Bayi / Parenting',
+                          '🏥 Kesehatan & Olahraga',
+                          '📱 Gadget & Teknologi',
+                          '🎓 Edukasi & Kursus Online',
+                        ].map((interest) => {
+                          const isSelected = targetInterests.includes(interest);
+                          return (
+                            <button
+                              key={interest}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setTargetInterests(targetInterests.filter((i) => i !== interest));
+                                } else {
+                                  setTargetInterests([...targetInterests, interest]);
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
+                                isSelected
+                                  ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                                  : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <span>{interest}</span>
+                              {isSelected && <Check className="w-3 h-3" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Custom Interest Input */}
+                      <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-750">
+                        <input
+                          type="text"
+                          placeholder="Ketik minat kustom lainnya..."
+                          value={customInterestInput}
+                          onChange={(e) => setCustomInterestInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && customInterestInput.trim()) {
+                              e.preventDefault();
+                              if (!targetInterests.includes(customInterestInput.trim())) {
+                                setTargetInterests([...targetInterests, customInterestInput.trim()]);
+                              }
+                              setCustomInterestInput('');
+                            }
+                          }}
+                          className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customInterestInput.trim()) {
+                              if (!targetInterests.includes(customInterestInput.trim())) {
+                                setTargetInterests([...targetInterests, customInterestInput.trim()]);
+                              }
+                              setCustomInterestInput('');
+                            }
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white rounded-lg transition-all"
+                        >
+                          + Tambah
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* UPLOAD LIST NOMOR EXCEL / CSV (Tampil saat tipe kampanye BROADCAST) */}
+              {campaignType === 'BROADCAST' && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/90 via-slate-50 to-teal-50/40 dark:from-slate-850 dark:via-slate-850 dark:to-emerald-950/20 border-2 border-emerald-500/30 dark:border-emerald-500/30 shadow-xs space-y-3.5">
+                  <div className="border-b border-emerald-200/80 dark:border-emerald-900/40 pb-2.5 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider shadow-xs">
+                        BROADCAST
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Upload Database / List Nomor Pelanggan (Excel / CSV)</span>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadSampleCsv}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-900/50 hover:bg-emerald-200 dark:hover:bg-emerald-800 transition-all flex items-center gap-1 cursor-pointer"
+                      title="Unduh contoh template CSV"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Template CSV</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Kirim broadcast langsung ke daftar nomor kontak pelanggan Anda. Format yang didukung: <strong>.xlsx, .xls, .csv, .txt</strong> (Kolom: Nomor HP / WhatsApp, Nama, Kota).
+                  </p>
+
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.txt"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleProcessFile(e.target.files[0]);
+                      }
+                    }}
+                    className="hidden"
+                  />
+
+                  {/* File Upload Dropzone */}
+                  {!uploadedListFileName ? (
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingFile(true);
+                      }}
+                      onDragLeave={() => setIsDraggingFile(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingFile(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleProcessFile(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`p-4 sm:p-5 rounded-xl border-2 border-dashed transition-all text-center cursor-pointer ${
+                        isDraggingFile
+                          ? 'border-emerald-500 bg-emerald-100/70 dark:bg-emerald-900/40 scale-[1.01]'
+                          : 'border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <UploadCloud className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Klik untuk Pilih File atau Tarik (Drag & Drop) File Excel / CSV
+                      </p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                        File Excel (.xlsx, .xls) atau CSV (.csv, .txt) • Maks. 25 MB
+                      </p>
+                    </div>
+                  ) : (
+                    /* Uploaded file preview card */
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-emerald-300 dark:border-emerald-800 shadow-2xs flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                          <FileCheck className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
+                            {uploadedListFileName}
+                          </span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">
+                            {uploadedListFileSize}
+                            {uploadedListFileCount !== undefined ? ` • ~${uploadedListFileCount.toLocaleString('id-ID')} Kontak Terdeteksi` : ' • File Siap Diproses'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-2 py-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-all"
+                        >
+                          Ganti File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveUploadedFile}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-all"
+                          title="Hapus File"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAMPILAN AUTO-FILL GPS KETIKA SUDAH DIPILIH VIA PETA */}
+              {gpsLatitude !== undefined && gpsLongitude !== undefined && (
+                <div className="p-3.5 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800/90 border border-blue-200 dark:border-blue-800 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between border-b border-blue-100 dark:border-slate-700 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">
+                        📍
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-extrabold text-blue-700 dark:text-blue-400 tracking-wider block">
+                          Titik Lokasi GPS & Radius Aktif
+                        </span>
+                        <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                          Radius {gpsRadiusMeters >= 1000 ? `${(gpsRadiusMeters / 1000).toFixed(1)} km` : `${gpsRadiusMeters} Meter`} dari Titik Koordinat
+                        </h5>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMapModalOpen(true)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-700 border border-blue-200 dark:border-slate-600 text-blue-600 dark:text-blue-300 hover:bg-blue-50 transition-all flex items-center gap-1"
+                    >
+                      <Navigation className="w-3 h-3" />
+                      <span>Atur Ulang Peta</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                    <div className="bg-white/80 dark:bg-slate-850/80 p-2 rounded-lg border border-blue-100/80 dark:border-slate-700">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Titik GPS (Lat, Long):</span>
+                      <strong className="text-slate-800 dark:text-slate-200 font-mono text-[11px]">
+                        {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
+                      </strong>
+                    </div>
+
+                    <div className="bg-white/80 dark:bg-slate-850/80 p-2 rounded-lg border border-blue-100/80 dark:border-slate-700">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Radius Jangkauan:</span>
+                      <strong className="text-blue-600 dark:text-blue-400 font-bold">
+                        {gpsRadiusMeters >= 1000 ? `${(gpsRadiusMeters / 1000).toFixed(1)} km (${gpsRadiusMeters} M)` : `${gpsRadiusMeters} Meter`}
+                      </strong>
+                    </div>
+
+                    <div className="bg-white/80 dark:bg-slate-850/80 p-2 rounded-lg border border-blue-100/80 dark:border-slate-700">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Alamat / Jalan:</span>
+                      <span className="text-slate-800 dark:text-slate-200 font-medium truncate block" title={streetAddress}>
+                        {streetAddress || 'Terdeteksi dari peta'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PARAMETER BROADCAST TAMBAHAN (Tanggal H+3, Sender ID, Isi Pesan 160 Karakter, Link Web) */}
+              <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Rincian Konten Siar & Jadwal Tayang
+                    </h5>
+                  </div>
+                  <span className="text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                    Sesuai Standar Telko
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Tanggal Broadcast (Bisa dipilih minimal H+3) */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Tanggal Siar Broadcast</span>
+                        <span className="text-rose-500">*</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                        Min. H+3
+                      </span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      min={minBroadcastDate}
+                      value={broadcastDate}
+                      onChange={(e) => setBroadcastDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 font-medium"
+                    />
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                      ℹ️ Jadwal siar tercepat: <strong>{minBroadcastDateFormatted}</strong> (Waktu moderasi operator & whitelist).
+                    </p>
+                  </div>
+
+                  {/* Nama Sender Pengirim */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Nama Sender / Masking Pengirim</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400">Maks. 11 Karakter</span>
+                    </label>
                     <input
                       type="text"
-                      placeholder={campaignType === 'LBA' ? 'Contoh: Surabaya Barat - Radius 2km dari Toko' : 'Contoh: Kota Surabaya, Jawa Timur, atau Seluruh Indonesia'}
-                      value={targetCityOrArea}
-                      onChange={(e) => setTargetCityOrArea(e.target.value)}
-                      className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                      maxLength={11}
+                      placeholder="Contoh: TOKOBERKAH"
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value.replace(/[^a-zA-Z0-9\s_-]/g, ''))}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 font-mono uppercase tracking-wider"
                     />
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                      Identitas pengirim yang muncul di HP penerima iklan.
+                    </p>
                   </div>
+                </div>
+
+                {/* Isi Pesan Siar Iklan (Maksimal 160 Karakter) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Isi Pesan Siar Iklan</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      adMessageContent.length >= 150
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                    }`}>
+                      {adMessageContent.length} / 160 Karakter
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    required
+                    maxLength={160}
+                    placeholder="Contoh: PROMO SPESIAL AKHIR PEKAN! Diskon s/d 50% di Toko Berkah. Tunjukkan SMS ini ke kasir untuk klaim hadiah. Info lengkap kunjungi bit.ly/promo..."
+                    value={adMessageContent}
+                    onChange={(e) => setAdMessageContent(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                  ></textarea>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    <span>💡 Pesan 1 SMS maksimal 160 karakter agar broadcast terkirim optimal & hemat kuota.</span>
+                    <span>Sisa: {160 - adMessageContent.length}</span>
+                  </div>
+                </div>
+
+                {/* Link Web / URL Promosi (Opsional) */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Kolom Link Web / URL Promosi (Opsional)</span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="Contoh: https://tokoberkah.com/promo atau bit.ly/promo-spesial"
+                    value={webLink}
+                    onChange={(e) => setWebLink(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                    Link website, landing page, atau nomor WhatsApp yang akan disertakan dalam kampanye.
+                  </p>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Catatan atau Jadwal Siar Khusus (Opsional)
+                  Catatan Tambahan atau Permintaan Khusus (Opsional)
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Contoh: Ingin broadcast tayang hari Jumat jam 10.00 WIB untuk promo weekend..."
+                  placeholder="Contoh: Jam tayang broadcast diutamakan pukul 10.00 - 12.00 siang..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
@@ -1664,6 +2613,143 @@ export const OrderModal: React.FC = () => {
                   ) : null}
                 </div>
               </div>
+            </div>
+
+            {/* RINGKASAN KONFIGURASI KAMPANYE & LOKASI GPS */}
+            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Konfigurasi Target & Materi Iklan</span>
+                </span>
+                <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                  {createdOrder.campaignType}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-slate-500 dark:text-slate-400 block">Sasaran Lokasi / Area:</span>
+                  <strong className="text-slate-800 dark:text-slate-200">{createdOrder.targetCityOrArea || 'Nasional'}</strong>
+                </div>
+
+                {createdOrder.broadcastDate && (
+                  <div>
+                    <span className="text-slate-500 dark:text-slate-400 block">Jadwal Tanggal Siar (H+3):</span>
+                    <strong className="text-blue-600 dark:text-blue-400">{createdOrder.broadcastDate}</strong>
+                  </div>
+                )}
+
+                {createdOrder.senderName && (
+                  <div>
+                    <span className="text-slate-500 dark:text-slate-400 block">Nama Sender / Masking:</span>
+                    <strong className="text-slate-800 dark:text-slate-200 font-mono uppercase">{createdOrder.senderName}</strong>
+                  </div>
+                )}
+
+                {createdOrder.webLink && (
+                  <div>
+                    <span className="text-slate-500 dark:text-slate-400 block">Link Web / Landing Page:</span>
+                    <span className="text-blue-600 dark:text-blue-400 underline truncate block">{createdOrder.webLink}</span>
+                  </div>
+                )}
+
+                {createdOrder.uploadedListFileName && (
+                  <div className="sm:col-span-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block">
+                          File List Kontak Diupload:
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+                          {createdOrder.uploadedListFileName} ({createdOrder.uploadedListFileSize || ''}{createdOrder.uploadedListFileCount ? ` • ~${createdOrder.uploadedListFileCount.toLocaleString('id-ID')} Kontak` : ''})
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                      Terlampir
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {(createdOrder.campaignType === 'TARGETED' || createdOrder.targetAgeGroup) && (
+                <div className="p-2.5 rounded-lg bg-rose-50/80 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 text-[11px] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                      <Target className="w-3.5 h-3.5" />
+                      <span>Kapabilitas Targeting yang Diaktifkan:</span>
+                    </span>
+                    <span className="text-[10px] font-semibold bg-rose-200/70 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 px-1.5 py-0.2 rounded">
+                      8 Parameter
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Grup Usia:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetAgeGroup || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Religi:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetReligion || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Gender:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetGender || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">ARPU Spending:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetArpuSpending || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Status SES:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetSes || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Device & OS:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetDeviceOs || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Pernikahan:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block">{createdOrder.targetMaritalStatus || 'Semua'}</strong>
+                    </div>
+                    <div className="bg-white/90 dark:bg-slate-800/90 p-1.5 rounded border border-rose-100 dark:border-slate-700">
+                      <span className="text-slate-400 block">Minat/Perilaku:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate block" title={createdOrder.targetInterests?.join(', ') || 'Semua'}>
+                        {createdOrder.targetInterests && createdOrder.targetInterests.length > 0 ? `${createdOrder.targetInterests.length} Minat` : 'Semua'}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {createdOrder.latitude && createdOrder.longitude && (
+                <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-[11px]">
+                  <span className="font-bold text-blue-700 dark:text-blue-300 block mb-0.5">
+                    📍 Titik Koordinat GPS & Radius:
+                  </span>
+                  <div className="text-slate-700 dark:text-slate-300">
+                    Lat: {createdOrder.latitude}, Lng: {createdOrder.longitude} • Radius: {createdOrder.radiusMeters >= 1000 ? `${(createdOrder.radiusMeters / 1000).toFixed(1)} km` : `${createdOrder.radiusMeters} Meter`}
+                    {createdOrder.streetAddress && (
+                      <div className="mt-0.5 text-slate-600 dark:text-slate-400">
+                        Alamat: {createdOrder.streetAddress}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {createdOrder.adMessageContent && (
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-[11px]">
+                  <span className="font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
+                    💬 Isi Pesan Siar ({createdOrder.adMessageContent.length} Karakter):
+                  </span>
+                  <p className="text-slate-800 dark:text-slate-200 italic">
+                    "{createdOrder.adMessageContent}"
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* REKENING RESMI PEMBAYARAN (Multi-Rekening Support) */}
@@ -1900,6 +2986,17 @@ export const OrderModal: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* GPS Leaflet Location Picker Modal */}
+      <GpsLocationMapPickerModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        onSave={handleSaveGpsLocation}
+        initialLat={gpsLatitude}
+        initialLng={gpsLongitude}
+        initialRadius={gpsRadiusMeters}
+        initialAddress={streetAddress}
+      />
     </div>
   );
 };

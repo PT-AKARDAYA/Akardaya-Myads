@@ -2400,10 +2400,49 @@ export const AdminDashboardModal: React.FC = () => {
                         </div>
 
                         <p className="text-slate-600 dark:text-slate-300">
-                          📦 Paket: <strong className="text-slate-900 dark:text-white">{order.selectedPackageName}</strong> | Budget: {order.estimatedBudget}
+                          📦 Paket: <strong className="text-slate-900 dark:text-white">{order.selectedPackageName}</strong> | Budget: {order.estimatedBudget} • <span className="font-semibold text-blue-600 dark:text-blue-400">{order.campaignType || 'BROADCAST'}</span>
                         </p>
                         {order.targetCityOrArea && (
                           <p className="text-slate-500">📍 Area: {order.targetCityOrArea}</p>
+                        )}
+                        {(order.latitude !== undefined && order.longitude !== undefined) && (
+                          <p className="text-blue-600 dark:text-blue-400 font-mono text-[11px]">
+                            🗺️ GPS: Lat {order.latitude}, Lng {order.longitude} (Radius {order.radiusMeters >= 1000 ? `${(order.radiusMeters / 1000).toFixed(1)} km` : `${order.radiusMeters} m`})
+                            {order.streetAddress && ` • ${order.streetAddress}`}
+                          </p>
+                        )}
+                        {order.uploadedListFileName && (
+                          <p className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] bg-emerald-50 dark:bg-emerald-950/40 p-1.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                            📊 File Kontak: <strong>{order.uploadedListFileName}</strong> ({order.uploadedListFileSize || ''}{order.uploadedListFileCount ? ` • ~${order.uploadedListFileCount} Nomor` : ''})
+                          </p>
+                        )}
+                        {order.broadcastDate && (
+                          <p className="text-slate-600 dark:text-slate-300 text-[11px]">
+                            📅 Tanggal Siar: <strong>{order.broadcastDate}</strong> {order.senderName && `• Sender: ${order.senderName}`}
+                          </p>
+                        )}
+                        {(order.campaignType === 'TARGETED' || order.targetAgeGroup) && (
+                          <div className="mt-1 p-2 rounded-lg bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 text-[10px] space-y-0.5">
+                            <span className="font-bold text-rose-700 dark:text-rose-400 block">🎯 Filter Targeting:</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-slate-700 dark:text-slate-300">
+                              <span>• Usia: {order.targetAgeGroup || 'Semua'}</span>
+                              <span>• Religi: {order.targetReligion || 'Semua'}</span>
+                              <span>• Gender: {order.targetGender || 'Semua'}</span>
+                              <span>• ARPU: {order.targetArpuSpending || 'Semua'}</span>
+                              <span>• SES: {order.targetSes || 'Semua'}</span>
+                              <span>• Device: {order.targetDeviceOs || 'Semua'}</span>
+                              <span>• Status: {order.targetMaritalStatus || 'Semua'}</span>
+                              <span className="truncate" title={order.targetInterests?.join(', ') || 'Semua'}>
+                                • Minat: {order.targetInterests && order.targetInterests.length > 0 ? `${order.targetInterests.length} Minat` : 'Semua'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {order.adMessageContent && (
+                          <p className="text-slate-600 dark:text-slate-300 italic text-[11px] bg-slate-50 dark:bg-slate-800/80 p-1.5 rounded border border-slate-200/70 dark:border-slate-700">
+                            💬 "{order.adMessageContent}"
+                            {order.webLink && <span className="block not-italic text-blue-500 underline mt-0.5">Link: {order.webLink}</span>}
+                          </p>
                         )}
                         {order.notes && <p className="text-slate-500 italic">📝 "{order.notes}"</p>}
                         <p className="text-[10px] text-slate-400">

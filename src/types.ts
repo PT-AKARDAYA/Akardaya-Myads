@@ -115,6 +115,32 @@ export interface OrderLead {
   channelRate?: number;
   estimatedReach?: number;
   totalPayment?: number;
+  // Detail Sasaran LBA & Kampanye
+  latitude?: number;
+  longitude?: number;
+  radiusMeters?: number; // 300 to 3000
+  streetAddress?: string;
+  broadcastDate?: string; // Tanggal Broadcast (min H+3)
+  adMessageContent?: string; // Isi pesan siar iklan (max 160 karakter)
+  webLink?: string; // Link URL Web / Landing Page jika ada
+  senderName?: string; // Nama Sender / Masking Pengirim
+  // Parameter Khusus TARGETED Campaign
+  targetProvince?: string; // Provinsi Sasaran Target
+  targetCity?: string; // Kota/Kabupaten Sasaran Target
+  targetDistrict?: string; // Kecamatan Sasaran Target
+  targetVillage?: string; // Kelurahan/Desa Sasaran Target
+  targetAgeGroup?: string; // Rentang Usia (e.g. "25-34 Tahun")
+  targetGender?: string; // Jenis Kelamin ("Semua", "Pria", "Wanita")
+  targetSes?: string; // Status SES ("Semua", "SES A (Atas)", "SES B (Menengah Atas)", dll)
+  targetMaritalStatus?: string; // Status Pernikahan ("Semua", "Lajang", "Menikah")
+  targetReligion?: string; // Agama / Religi ("Semua", "Islam", "Kristen", dll)
+  targetArpuSpending?: string; // Pengeluaran Pulsa ARPU ("Semua", "Medium (50k-150k)", "High (>150k)")
+  targetDeviceOs?: string; // Device & OS ("Semua", "Android", "iOS")
+  targetInterests?: string[]; // Minat / Perilaku (Hobi & Lifestyle)
+  // Parameter Khusus BROADCAST Campaign (Upload List Excel/CSV)
+  uploadedListFileName?: string; // Nama file Excel/CSV yang diupload
+  uploadedListFileCount?: number; // Jumlah nomor/baris dalam file
+  uploadedListFileSize?: string; // Ukuran file terformat (e.g. "124 KB")
 }
 
 export interface OfficeLocation {
