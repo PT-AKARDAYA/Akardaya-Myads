@@ -2,15 +2,16 @@
  * AKARDAYA MYADS - GOOGLE APPS SCRIPT DATABASE BACKEND (Code.gs)
  * Multi-Sheet Database Architecture (Satu Menu Satu Sheet Khusus)
  * 
- * Daftar 8 Sheet Database yang dibuat & dikelola otomatis:
+ * Daftar 9 Sheet Database yang dibuat & dikelola otomatis:
  * 1. PAKET_LANGGANAN     -> Data Paket Langganan & Detail Fasilitas
  * 2. DISKON_ISI_ULANG    -> Setting Promo & Bonus Saldo per Tier Nominal (SKEMA_TIERS_JSON)
  * 3. TARIF_SALURAN_IKLAN -> Katalog Tarif Saluran Iklan (SMS, LBA, MMS, RCS, WA WABA)
  * 4. PENGATURAN_UMUM     -> Nomor WhatsApp, Brand, Email, Jam Operasional & Pengumuman
- * 5. LOKASI_CABANG       -> Daftar Kantor Cabang & Koordinat Peta
- * 6. TESTIMONI           -> Ulasan & Review Kepuasan Pelanggan
- * 7. PESANAN_LEADS       -> Catatan Formulir Masuk Pemesanan Klien
- * 8. Analytics_Logs      -> Log Pengunjung Riil + ISP Provider & Kota/Lokasi (Hemat Baris Harian)
+ * 5. REKENING_BANK       -> Multi Rekening Resmi Pembayaran (1 Baris = 1 Rekening Bank)
+ * 6. LOKASI_CABANG       -> Daftar Kantor Cabang & Koordinat Peta
+ * 7. TESTIMONI           -> Ulasan & Review Kepuasan Pelanggan
+ * 8. PESANAN_LEADS       -> Catatan Formulir Masuk Pemesanan Klien
+ * 9. Analytics_Logs      -> Log Pengunjung Riil + ISP Provider & Kota/Lokasi (Hemat Baris Harian)
  * 
  * -------------------------------------------------------------
  * PETUNJUK PENERAPAN (DEPLOY):
@@ -33,6 +34,7 @@ const SHEET_PACKAGES = "PAKET_LANGGANAN";
 const SHEET_DISCOUNT = "DISKON_ISI_ULANG";
 const SHEET_RATES = "TARIF_SALURAN_IKLAN";
 const SHEET_CONFIG = "PENGATURAN_UMUM";
+const SHEET_BANKS = "REKENING_BANK";
 const SHEET_OFFICES = "LOKASI_CABANG";
 const SHEET_TESTIMONIALS = "TESTIMONI";
 const SHEET_LEADS = "PESANAN_LEADS";
@@ -105,7 +107,24 @@ function setupSheets() {
     }
   }
 
-  // 5. Sheet LOKASI_CABANG
+  // 5. Sheet REKENING_BANK (Khusus Multi-Rekening Resmi - 1 Baris per Rekening)
+  const bankHeaders = [
+    "ID", "NAMA_BANK", "NO_REKENING", "ATAS_NAMA", "REKENING_UTAMA", "STATUS_AKTIF", "CATATAN"
+  ];
+  if (!ss.getSheetByName(SHEET_BANKS)) {
+    const s = ss.insertSheet(SHEET_BANKS);
+    s.appendRow(bankHeaders);
+    s.setFrozenRows(1);
+    formatHeader(s, "#047857"); // Emerald green header
+  } else {
+    const s = ss.getSheetByName(SHEET_BANKS);
+    if (s.getLastRow() >= 1) {
+      s.getRange(1, 1, 1, bankHeaders.length).setValues([bankHeaders]);
+      formatHeader(s, "#047857");
+    }
+  }
+
+  // 6. Sheet LOKASI_CABANG
   if (!ss.getSheetByName(SHEET_OFFICES)) {
     const s = ss.insertSheet(SHEET_OFFICES);
     s.appendRow([
@@ -490,7 +509,41 @@ function readAllSheets(ss) {
     };
   }
 
-  // 5. Baca Sheet LOKASI_CABANG
+  // 5. Baca Sheet REKENING_BANK (Daftar Multi-Rekening Resmi)
+  const sBanks = ss.getSheetByName(SHEET_BANKS);
+  if (sBanks && sBanks.getLastRow() > 1) {
+    const bankRows = sBanks.getRange(2, 1, sBanks.getLastRow() - 1, sBanks.getLastColumn()).getValues();
+    const loadedBanks = bankRows.map(function(r, idx) {
+      const isPri = String(r[4]).toUpperCase() === "YA" || r[4] === true;
+      const isAct = String(r[5]).toUpperCase() !== "NONAKTIF" && String(r[5]).toUpperCase() !== "TIDAK" && r[5] !== false;
+      return {
+        id: r[0] ? String(r[0]) : ("bank_" + (idx + 1)),
+        bankName: String(r[1] || ""),
+        accountNumber: String(r[2] || ""),
+        accountHolder: String(r[3] || "PT Akardaya Telekomunikasi Indonesia"),
+        isPrimary: isPri,
+        isActive: isAct,
+        notes: String(r[6] || "")
+      };
+    }).filter(function(b) {
+      return Boolean(b.bankName && b.accountNumber);
+    });
+
+    if (loadedBanks.length > 0) {
+      if (!loadedBanks.some(function(b) { return b.isPrimary; })) {
+        loadedBanks[0].isPrimary = true;
+      }
+      result.companyConfig.bankAccounts = loadedBanks;
+      const pri = loadedBanks.find(function(b) { return b.isPrimary; }) || loadedBanks[0];
+      if (pri) {
+        result.companyConfig.bankName = pri.bankName;
+        result.companyConfig.bankAccountNumber = pri.accountNumber;
+        result.companyConfig.bankAccountHolder = pri.accountHolder;
+      }
+    }
+  }
+
+  // 6. Baca Sheet LOKASI_CABANG
   const sOff = ss.getSheetByName(SHEET_OFFICES);
   if (sOff && sOff.getLastRow() > 1) {
     const rows = sOff.getRange(2, 1, sOff.getLastRow() - 1, sOff.getLastColumn()).getValues();
@@ -1124,7 +1177,39 @@ function saveAllSheets(ss, data) {
     ]]);
   }
 
-  // 5. Tulis Sheet LOKASI_CABANG
+  // 5. Tulis Sheet REKENING_BANK (1 Baris untuk Setiap Rekening Bank Resmi)
+  const allBankAccounts = (data.companyConfig && Array.isArray(data.companyConfig.bankAccounts) && data.companyConfig.bankAccounts.length > 0)
+    ? data.companyConfig.bankAccounts
+    : [
+        {
+          id: "bank_bca_1",
+          bankName: (data.companyConfig && data.companyConfig.bankName) || "BCA (Bank Central Asia)",
+          accountNumber: (data.companyConfig && data.companyConfig.bankAccountNumber) || "0188-3333-7157",
+          accountHolder: (data.companyConfig && data.companyConfig.bankAccountHolder) || "PT Akardaya Telekomunikasi Indonesia",
+          isPrimary: true,
+          isActive: true,
+          notes: "Rekening Utama"
+        }
+      ];
+
+  const sBanks = ss.getSheetByName(SHEET_BANKS) || ss.insertSheet(SHEET_BANKS);
+  if (sBanks.getLastRow() > 1) {
+    sBanks.getRange(2, 1, sBanks.getLastRow() - 1, sBanks.getLastColumn()).clearContent();
+  }
+  const bankRows = allBankAccounts.map(function(b, idx) {
+    return [
+      b.id || ("bank_" + (idx + 1)),
+      b.bankName || "",
+      b.accountNumber || "",
+      b.accountHolder || "",
+      b.isPrimary ? "YA" : "TIDAK",
+      b.isActive ? "AKTIF" : "NONAKTIF",
+      b.notes || ""
+    ];
+  });
+  sBanks.getRange(2, 1, bankRows.length, bankRows[0].length).setValues(bankRows);
+
+  // 6. Tulis Sheet LOKASI_CABANG
   if (data.offices && Array.isArray(data.offices) && data.offices.length > 0) {
     const s = ss.getSheetByName(SHEET_OFFICES);
     if (s.getLastRow() > 1) {
