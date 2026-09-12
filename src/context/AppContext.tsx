@@ -621,11 +621,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchInitialDataRef.current();
     connectWebSocketRef.current();
 
-    // 2. Exactly 1 second (1000ms) after app open: perform silent background sync with Google Sheets & Server
+    // 2. Immediate silent background sync (300ms) after app open with Google Sheets & Server
     const backgroundSyncTimer = setTimeout(() => {
-      console.log('🔄 [Background Sync] Memulai sinkronisasi data otomatis 1 detik setelah aplikasi dibuka...');
+      console.log('🔄 [Background Sync] Memulai sinkronisasi data otomatis di belakang layar setelah aplikasi dibuka...');
       syncLatestDataRef.current(true, true);
-    }, 1000);
+    }, 300);
 
     // 3. Setup BroadcastChannel for Instant 0ms Cross-Tab Sync (Same Browser / Device)
     try {
@@ -696,12 +696,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 4. Background polling timer (Every 15 seconds) to fetch spreadsheet updates across all users
+    // 4. Background polling timer (Every 20 seconds) to fetch database/spreadsheet updates across all users
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible' && !isSyncPausedRef.current && !isOrderModalOpenRef.current) {
         syncLatestDataRef.current(true);
       }
-    }, 15000);
+    }, 20000);
 
     return () => {
       clearTimeout(backgroundSyncTimer);

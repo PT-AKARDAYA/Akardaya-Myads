@@ -2659,7 +2659,11 @@ export const AdminDashboardModal: React.FC = () => {
                         </div>
 
                         <p className="text-[10px] text-slate-400 mt-2">
-                          Waktu: {new Date(order.createdAt).toLocaleString('id-ID')}
+                          Waktu: {(() => {
+                            if (!order.createdAt) return '-';
+                            const d = new Date(order.createdAt);
+                            return isNaN(d.getTime()) ? String(order.createdAt) : d.toLocaleString('id-ID');
+                          })()}
                         </p>
                       </div>
 
