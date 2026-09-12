@@ -226,23 +226,25 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
   const { data, activeUsers } = useApp();
   const gaGeneralUrl = 'https://analytics.google.com/analytics/web/';
 
+  // 1. Initial State loaded IMMEDIATELY from local cache for 0ms instant display when switching tabs
+  const initialLocal = useMemo(() => getLocalAnalyticsSummary(), []);
+
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [dataSource, setDataSource] = useState<'spreadsheet' | 'server' | 'local'>('local');
-  const [totalPageViews, setTotalPageViews] = useState<number>(0);
-  const [uniqueVisitors, setUniqueVisitors] = useState<number>(0);
-  const [deviceBreakdown, setDeviceBreakdown] = useState({
-    mobile: 0,
-    desktop: 0,
-    tablet: 0,
-    mobileCount: 0,
-    desktopCount: 0,
-    tabletCount: 0,
+  const [totalPageViews, setTotalPageViews] = useState<number>(initialLocal.totalViews);
+  const [uniqueVisitors, setUniqueVisitors] = useState<number>(initialLocal.uniqueVisitors);
+  const [deviceBreakdown, setDeviceBreakdown] = useState(initialLocal.devicePercentages);
+  const [topPages, setTopPages] = useState<{ page: string; count: number }[]>(initialLocal.topPages);
+  const [topBrowsers, setTopBrowsers] = useState<{ browser: string; count: number }[]>(initialLocal.topBrowsers);
+  const [dailyCounts, setDailyCounts] = useState<{ date: string; label: string; count: number }[]>(initialLocal.dailyCounts);
+  const [recentLogs, setRecentLogs] = useState<VisitorRecord[]>(initialLocal.logs);
+  const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('akardaya_analytics_last_sync') || '';
+    }
+    return '';
   });
-  const [topPages, setTopPages] = useState<{ page: string; count: number }[]>([]);
-  const [topBrowsers, setTopBrowsers] = useState<{ browser: string; count: number }[]>([]);
-  const [dailyCounts, setDailyCounts] = useState<{ date: string; label: string; count: number }[]>([]);
-  const [recentLogs, setRecentLogs] = useState<VisitorRecord[]>([]);
-  const [lastSyncTime, setLastSyncTime] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -264,9 +266,11 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
     }, 2000);
   };
 
-  // Fetch actual recorded visitor data from Google Spreadsheet first, fallback to server & local
-  const refreshAnalyticsData = useCallback(async (forceRemoteOnly = false) => {
-    setIsLoading(true);
+  // Fetch actual recorded visitor data smoothly in the background without resetting existing UI
+  const refreshAnalyticsData = useCallback(async (forceRemoteOnly = false, silent = false) => {
+    if (!silent) {
+      setIsRefreshing(true);
+    }
     try {
       const spreadsheetUrl = data?.companyConfig?.spreadsheetUrl;
       let logsToUse: VisitorRecord[] | null = null;
@@ -278,10 +282,6 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         if (sheetLogs !== null) {
           logsToUse = sheetLogs;
           sourceFound = 'spreadsheet';
-          // SINKRONISASI DATABASE KE LOCAL STORAGE
-          // Google Spreadsheet adalah SUMBER KEBENARAN UTAMA (Single Source of Truth)
-          // Jika di spreadsheet 0 data (atau database di-reset), sinkronkan local storage menjadi 0 data
-          // agar data lama di browser tidak muncul kembali sebagai data hantu!
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(sheetLogs));
           } catch {}
@@ -318,28 +318,54 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
         sourceFound = 'local';
       }
 
-      setDataSource(sourceFound);
+      if (logsToUse !== null) {
+        setDataSource(sourceFound);
 
-      // Calculate statistics purely from the real logs
-      const summary = calculateAnalyticsSummaryFromLogs(logsToUse || []);
-      setTotalPageViews(summary.totalViews);
-      setUniqueVisitors(summary.uniqueVisitors);
-      setDeviceBreakdown(summary.devicePercentages);
-      setTopPages(summary.topPages);
-      setTopBrowsers(summary.topBrowsers);
-      setDailyCounts(summary.dailyCounts);
-      setRecentLogs(summary.logs);
-      setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
+        // Calculate statistics purely from the real logs
+        const summary = calculateAnalyticsSummaryFromLogs(logsToUse || []);
+        setTotalPageViews(summary.totalViews);
+        setUniqueVisitors(summary.uniqueVisitors);
+        setDeviceBreakdown(summary.devicePercentages);
+        setTopPages(summary.topPages);
+        setTopBrowsers(summary.topBrowsers);
+        setDailyCounts(summary.dailyCounts);
+        setRecentLogs(summary.logs);
+        const syncLabel = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        setLastSyncTime(syncLabel);
+        try {
+          localStorage.setItem('akardaya_analytics_last_sync', syncLabel);
+        } catch {}
+      }
     } catch (err) {
       console.warn('Error loading real analytics stats:', err);
     } finally {
+      setIsRefreshing(false);
       setIsLoading(false);
     }
   }, [data?.companyConfig?.spreadsheetUrl, data?.analyticsLogs]);
 
+  // Initial load and periodic background auto-sync every 20 seconds
   useEffect(() => {
-    refreshAnalyticsData();
-  }, [refreshAnalyticsData]);
+    // Initial fetch (silent if we already have local data)
+    const hasInitial = initialLocal.logs && initialLocal.logs.length > 0;
+    refreshAnalyticsData(false, hasInitial);
+
+    // Periodic background sync
+    const interval = setInterval(() => {
+      refreshAnalyticsData(false, true);
+    }, 20000);
+
+    // Sync when user focuses back on window
+    const handleFocus = () => {
+      refreshAnalyticsData(false, true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [refreshAnalyticsData, initialLocal.logs]);
 
   const handleClearLogs = async () => {
     const hasSpreadsheet = dataSource === 'spreadsheet' && data?.companyConfig?.spreadsheetUrl;
@@ -824,12 +850,12 @@ export const VisitorAnalyticsDashboard: React.FC = () => {
 
           {/* Refresh Action */}
           <button
-            onClick={() => refreshAnalyticsData()}
-            disabled={isLoading}
+            onClick={() => refreshAnalyticsData(false, false)}
+            disabled={isRefreshing || isLoading}
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer shrink-0"
             title="Muat ulang data analitik"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${(isRefreshing || isLoading) ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
