@@ -163,8 +163,20 @@ export const safeNormalizeData = (incoming: any): AppData => {
     bankAccountNumber: rawCompany.bankAccountNumber || INITIAL_APP_DATA.companyConfig.bankAccountNumber,
     bankAccountHolder: rawCompany.bankAccountHolder || INITIAL_APP_DATA.companyConfig.bankAccountHolder,
     paymentInstructions: rawCompany.paymentInstructions || INITIAL_APP_DATA.companyConfig.paymentInstructions,
-    bankAccounts: (Array.isArray(rawCompany.bankAccounts) && rawCompany.bankAccounts.length > 0)
-      ? rawCompany.bankAccounts.map((b: any, idx: number) => ({
+    bankAccounts: (() => {
+      let rawList = rawCompany.bankAccounts;
+      if (typeof rawList === 'string') {
+        try {
+          const parsed = JSON.parse(rawList);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            rawList = parsed;
+          }
+        } catch (e) {
+          rawList = [];
+        }
+      }
+      if (Array.isArray(rawList) && rawList.length > 0) {
+        return rawList.map((b: any, idx: number) => ({
           id: b.id || `bank-${idx}-${Date.now()}`,
           bankName: b.bankName || 'BCA (Bank Central Asia)',
           accountNumber: b.accountNumber || '0188-3333-7157',
@@ -172,8 +184,10 @@ export const safeNormalizeData = (incoming: any): AppData => {
           isPrimary: b.isPrimary !== undefined ? Boolean(b.isPrimary) : idx === 0,
           isActive: b.isActive !== undefined ? Boolean(b.isActive) : true,
           notes: b.notes || '',
-        }))
-      : (INITIAL_APP_DATA.companyConfig.bankAccounts || [
+        }));
+      }
+      return (
+        INITIAL_APP_DATA.companyConfig.bankAccounts || [
           {
             id: 'bank-bca-primary',
             bankName: rawCompany.bankName || 'BCA (Bank Central Asia)',
@@ -183,7 +197,9 @@ export const safeNormalizeData = (incoming: any): AppData => {
             isActive: true,
             notes: 'Rekening Utama',
           },
-        ]),
+        ]
+      );
+    })(),
   };
 
   const safeOffices: OfficeLocation[] = (Array.isArray(incoming.offices) && incoming.offices.length > 0

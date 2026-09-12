@@ -68,7 +68,35 @@ async function syncWithGoogleSheet(): Promise<AppData | null> {
                   ? (() => { try { return JSON.parse(d.discountConfig.monetaryTiers); } catch { return appData.discountConfig.monetaryTiers; } })()
                   : appData.discountConfig.monetaryTiers)
           } : appData.discountConfig,
-          companyConfig: d.companyConfig ? { ...appData.companyConfig, ...d.companyConfig } : appData.companyConfig,
+          companyConfig: d.companyConfig ? {
+            ...appData.companyConfig,
+            ...d.companyConfig,
+            bankAccounts: (() => {
+              if (Array.isArray(d.companyConfig.bankAccounts) && d.companyConfig.bankAccounts.length > 0) {
+                return d.companyConfig.bankAccounts;
+              }
+              if (typeof d.companyConfig.bankAccounts === 'string') {
+                try {
+                  const p = JSON.parse(d.companyConfig.bankAccounts);
+                  if (Array.isArray(p) && p.length > 0) return p;
+                } catch {}
+              }
+              if (appData.companyConfig?.bankAccounts && appData.companyConfig.bankAccounts.length > 0) {
+                return appData.companyConfig.bankAccounts;
+              }
+              return [
+                {
+                  id: 'bank-bca-primary',
+                  bankName: d.companyConfig.bankName || 'BCA (Bank Central Asia)',
+                  accountNumber: d.companyConfig.bankAccountNumber || '0188-3333-7157',
+                  accountHolder: d.companyConfig.bankAccountHolder || 'PT Akardaya Telekomunikasi Indonesia',
+                  isPrimary: true,
+                  isActive: true,
+                  notes: 'Rekening Utama',
+                }
+              ];
+            })()
+          } : appData.companyConfig,
           offices: Array.isArray(d.offices) ? d.offices : (appData.offices || []),
           testimonials: Array.isArray(d.testimonials) ? d.testimonials : appData.testimonials,
           orders: Array.isArray(d.orders) ? d.orders : appData.orders,

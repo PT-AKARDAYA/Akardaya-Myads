@@ -86,16 +86,23 @@ function setupSheets() {
     formatHeader(s, "#4F46E5"); // Indigo header
   }
 
-  // 4. Sheet PENGATURAN_UMUM
+  // 4. Sheet PENGATURAN_UMUM (Termasuk DAFTAR_REKENING_JSON)
+  const configHeaders = [
+    "NAMA_BRAND", "TAGLINE", "NO_WHATSAPP", "TAMPILAN_NO_WA", "EMAIL_SUPPORT",
+    "ALAMAT_KANTOR", "JAM_OPERASIONAL", "TEKS_PENGUMUMAN", "TAMPILKAN_PENGUMUMAN", "TERAKHIR_UPDATE",
+    "NAMA_BANK", "NO_REKENING", "ATAS_NAMA", "PANDUAN_PEMBAYARAN", "DAFTAR_REKENING_JSON"
+  ];
   if (!ss.getSheetByName(SHEET_CONFIG)) {
     const s = ss.insertSheet(SHEET_CONFIG);
-    s.appendRow([
-      "NAMA_BRAND", "TAGLINE", "NO_WHATSAPP", "TAMPILAN_NO_WA", "EMAIL_SUPPORT",
-      "ALAMAT_KANTOR", "JAM_OPERASIONAL", "TEKS_PENGUMUMAN", "TAMPILKAN_PENGUMUMAN", "TERAKHIR_UPDATE",
-      "NAMA_BANK", "NO_REKENING", "ATAS_NAMA", "PANDUAN_PEMBAYARAN"
-    ]);
+    s.appendRow(configHeaders);
     s.setFrozenRows(1);
     formatHeader(s, "#D97706"); // Amber header
+  } else {
+    const s = ss.getSheetByName(SHEET_CONFIG);
+    if (s.getLastRow() >= 1) {
+      s.getRange(1, 1, 1, configHeaders.length).setValues([configHeaders]);
+      formatHeader(s, "#D97706");
+    }
   }
 
   // 5. Sheet LOKASI_CABANG
@@ -437,7 +444,34 @@ function readAllSheets(ss) {
   // 4. Baca Sheet PENGATURAN_UMUM
   const sConf = ss.getSheetByName(SHEET_CONFIG);
   if (sConf && sConf.getLastRow() > 1) {
-    const r = sConf.getRange(2, 1, 1, sConf.getLastColumn()).getValues()[0];
+    const r = sConf.getRange(2, 1, 1, Math.max(sConf.getLastColumn(), 15)).getValues()[0];
+    
+    var parsedBankAccounts = [];
+    if (r[14]) {
+      try {
+        var rawJson = typeof r[14] === "string" ? JSON.parse(r[14]) : r[14];
+        if (Array.isArray(rawJson) && rawJson.length > 0) {
+          parsedBankAccounts = rawJson;
+        }
+      } catch (errJson) {
+        parsedBankAccounts = [];
+      }
+    }
+
+    if (parsedBankAccounts.length === 0 && (r[10] || r[11])) {
+      parsedBankAccounts = [
+        {
+          id: "bank-primary-1",
+          bankName: String(r[10] || "BCA (Bank Central Asia)"),
+          accountNumber: String(r[11] || "0188-3333-7157"),
+          accountHolder: String(r[12] || "PT Akardaya Telekomunikasi Indonesia"),
+          isPrimary: true,
+          isActive: true,
+          notes: "Rekening Utama"
+        }
+      ];
+    }
+
     result.companyConfig = {
       brandName: String(r[0] || ""),
       brandTagline: String(r[1] || ""),
@@ -451,7 +485,8 @@ function readAllSheets(ss) {
       bankName: r[10] ? String(r[10]) : undefined,
       bankAccountNumber: r[11] ? String(r[11]) : undefined,
       bankAccountHolder: r[12] ? String(r[12]) : undefined,
-      paymentInstructions: r[13] ? String(r[13]) : undefined
+      paymentInstructions: r[13] ? String(r[13]) : undefined,
+      bankAccounts: parsedBankAccounts
     };
   }
 
@@ -1061,7 +1096,16 @@ function saveAllSheets(ss, data) {
       s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
     }
     const c = data.companyConfig;
-    s.getRange(2, 1, 1, 14).setValues([[
+    const primaryBank = (c.bankAccounts && Array.isArray(c.bankAccounts) && c.bankAccounts.length > 0)
+      ? (c.bankAccounts.find(function(b) { return b.isPrimary; }) || c.bankAccounts[0])
+      : null;
+
+    const bName = primaryBank ? primaryBank.bankName : (c.bankName || "");
+    const bAcc = primaryBank ? primaryBank.accountNumber : (c.bankAccountNumber || "");
+    const bHolder = primaryBank ? primaryBank.accountHolder : (c.bankAccountHolder || "");
+    const bankAccountsJson = JSON.stringify(c.bankAccounts || []);
+
+    s.getRange(2, 1, 1, 15).setValues([[
       c.brandName || "",
       c.brandTagline || "",
       c.waNumber || "",
@@ -1072,10 +1116,11 @@ function saveAllSheets(ss, data) {
       c.announcementText || "",
       c.showAnnouncement ? "YA" : "TIDAK",
       now,
-      c.bankName || "",
-      c.bankAccountNumber || "",
-      c.bankAccountHolder || "",
-      c.paymentInstructions || ""
+      bName,
+      bAcc,
+      bHolder,
+      c.paymentInstructions || "",
+      bankAccountsJson
     ]]);
   }
 

@@ -580,6 +580,18 @@ export const AdminApp: React.FC = () => {
     }
   };
 
+  // Save Bank Accounts Directly to Database
+  const handleSaveBankAccountsDirectly = async () => {
+    setIsSaving(true);
+    const success = await updateAppData({
+      companyConfig: draftData.companyConfig,
+    });
+    setIsSaving(false);
+    if (success) {
+      showToast('Pengaturan rekening berhasil disimpan permanen ke database & spreadsheet!', 'SUCCESS');
+    }
+  };
+
   // Save All and broadcast via WebSocket
   const handleSaveAll = async () => {
     setIsSaving(true);
@@ -2127,6 +2139,24 @@ export const AdminApp: React.FC = () => {
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     💡 Petunjuk ini akan langsung terbaca oleh pelanggan bersama nomor rekening resmi begitu mereka menekan tombol <strong>Kirim Pesanan</strong>.
                   </p>
+                </div>
+
+                {/* Tombol Simpan Pengaturan Rekening Langsung */}
+                <div className="pt-3 flex flex-col sm:flex-row items-center justify-between gap-3 bg-emerald-50/50 dark:bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/50">
+                  <div className="text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Perubahan rekening tersimpan di draft. Klik tombol untuk menyimpan ke database server & spreadsheet.</span>
+                  </div>
+                  <button
+                    type="button"
+                    id="btn-save-bank-accounts-directly"
+                    disabled={isSaving}
+                    onClick={handleSaveBankAccountsDirectly}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Rekening'}</span>
+                  </button>
                 </div>
               </div>
             </div>
