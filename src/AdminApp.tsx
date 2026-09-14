@@ -1295,6 +1295,19 @@ export const AdminApp: React.FC = () => {
 
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 mb-0.5">
+                        Tagline / Sub-judul Paket (di bawah nama):
+                      </label>
+                      <input
+                        type="text"
+                        value={pkg.tagline || ''}
+                        placeholder="Contoh: Paket all-in-one lengkap dengan bonus..."
+                        onChange={(e) => handlePackageChange(pkg.id, 'tagline', e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-0.5">
                         Deskripsi Paket:
                       </label>
                       <textarea
