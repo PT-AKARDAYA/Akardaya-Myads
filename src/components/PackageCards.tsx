@@ -355,56 +355,48 @@ export const PackageCards: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* High-Value Special Perks */}
+                        {/* High-Value Special Perks (Hanya tampil jika ada/aktif) */}
                         <div className="py-3 space-y-2 text-xs text-slate-700 dark:text-slate-200">
-                          <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50">
-                            <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                            <div>
-                              <span className="font-bold text-blue-900 dark:text-blue-200">
-                                Gratis {pkg.freeContentPerMonth}x Konten Promosi
-                              </span>
-                              <p className="text-[10px] text-blue-700 dark:text-blue-300">FB + Instagram + TikTok</p>
+                          {pkg.freeContentPerMonth > 0 && (
+                            <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50">
+                              <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                              <div>
+                                <span className="font-bold text-blue-900 dark:text-blue-200">
+                                  Gratis {pkg.freeContentPerMonth}x Konten Promosi
+                                </span>
+                                <p className="text-[10px] text-blue-700 dark:text-blue-300">FB + Instagram + TikTok</p>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          <div
-                            className={`flex items-center gap-2 p-2 rounded-xl border ${
-                              pkg.freeWebsiteMonths > 0
-                                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
-                                : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-500'
-                            }`}
-                          >
-                            <Globe
-                              className={`w-4 h-4 shrink-0 ${
-                                pkg.freeWebsiteMonths > 0
-                                  ? 'text-emerald-600 dark:text-emerald-400'
-                                  : 'text-slate-400 dark:text-slate-600'
-                              }`}
-                            />
-                            <div>
-                              <span className="font-bold">
-                                {pkg.freeWebsiteMonths > 0
-                                  ? `FREE Website Usaha (${pkg.freeWebsiteMonths} Bulan)`
-                                  : 'Free Website (Khusus tier ≥500k)'}
-                              </span>
-                              {pkg.freeWebsiteMonths > 0 && (
+                          {pkg.freeWebsiteMonths > 0 && (
+                            <div className="flex items-center gap-2 p-2 rounded-xl border bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200">
+                              <Globe className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <div>
+                                <span className="font-bold">
+                                  FREE Website Usaha ({pkg.freeWebsiteMonths} Bulan)
+                                </span>
                                 <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
                                   Landing page katalog online siap pesan
                                 </p>
-                              )}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          <div className="grid grid-cols-2 gap-1.5 pt-0.5 text-[11px]">
-                            <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 truncate">
-                              <UserCheck className="w-3 h-3 text-indigo-500 shrink-0" />
-                              <span className="truncate">{pkg.accountType}</span>
+                          {(pkg.accountType || pkg.saldoInfo) && (
+                            <div className={`grid ${pkg.accountType ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 pt-0.5 text-[11px]`}>
+                              {pkg.accountType && (
+                                <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 truncate">
+                                  <UserCheck className="w-3 h-3 text-indigo-500 shrink-0" />
+                                  <span className="truncate">{pkg.accountType}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 truncate">
+                                <Coins className="w-3 h-3 text-amber-500 shrink-0" />
+                                <span className="truncate">Saldo 100% Utuh</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 truncate">
-                              <Coins className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span className="truncate">Saldo 100% Utuh</span>
-                            </div>
-                          </div>
+                          )}
                         </div>
 
                         {/* Checklist */}
@@ -537,63 +529,55 @@ export const PackageCards: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* High-Value Included Special Perks */}
+                  {/* High-Value Included Special Perks (Hanya tampil jika ada/aktif) */}
                   <div className="py-4 space-y-2.5 text-xs text-slate-700 dark:text-slate-200">
                     {/* Free Content */}
-                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50">
-                      <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                      <div>
-                        <span className="font-semibold text-blue-900 dark:text-blue-200">
-                          Gratis {pkg.freeContentPerMonth}x Konten Promosi
-                        </span>
-                        <p className="text-[10px] text-blue-700 dark:text-blue-300">FB + Instagram + TikTok</p>
+                    {pkg.freeContentPerMonth > 0 && (
+                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50">
+                        <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <div>
+                          <span className="font-semibold text-blue-900 dark:text-blue-200">
+                            Gratis {pkg.freeContentPerMonth}x Konten Promosi
+                          </span>
+                          <p className="text-[10px] text-blue-700 dark:text-blue-300">FB + Instagram + TikTok</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Free Website */}
-                    <div
-                      className={`flex items-center gap-2.5 p-2 rounded-lg border ${
-                        pkg.freeWebsiteMonths > 0
-                          ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
-                          : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-500'
-                      }`}
-                    >
-                      <Globe
-                        className={`w-4 h-4 shrink-0 ${
-                          pkg.freeWebsiteMonths > 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-slate-400 dark:text-slate-600'
-                        }`}
-                      />
-                      <div>
-                        <span className="font-semibold">
-                          {pkg.freeWebsiteMonths > 0
-                            ? `FREE Website Usaha (${pkg.freeWebsiteMonths} Bulan)`
-                            : 'Free Website (Khusus tier ≥500k)'}
-                        </span>
-                        {pkg.freeWebsiteMonths > 0 && (
+                    {pkg.freeWebsiteMonths > 0 && (
+                      <div className="flex items-center gap-2.5 p-2 rounded-lg border bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200">
+                        <Globe className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        <div>
+                          <span className="font-semibold">
+                            FREE Website Usaha ({pkg.freeWebsiteMonths} Bulan)
+                          </span>
                           <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
                             Landing page katalog online siap pesan
                           </p>
-                        )}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Account Type & Saldo */}
-                    <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-                      <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                        <UserCheck className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span className="truncate" title={`Pembuatan: ${pkg.accountType}`}>
-                          {pkg.accountType}
-                        </span>
+                    {(pkg.accountType || pkg.saldoInfo) && (
+                      <div className={`grid ${pkg.accountType ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1 text-[11px]`}>
+                        {pkg.accountType && (
+                          <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                            <UserCheck className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            <span className="truncate" title={`Pembuatan: ${pkg.accountType}`}>
+                              {pkg.accountType}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                          <Coins className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span className="truncate" title="Saldo My Ads Penuh">
+                            Saldo 100%
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                        <Coins className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                        <span className="truncate" title="Saldo My Ads Penuh">
-                          Saldo 100%
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Key Highlights Checklist */}
