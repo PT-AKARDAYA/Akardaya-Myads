@@ -3,7 +3,7 @@ import { AppData, SubscriptionPackage, ChannelRate, DiscountConfig, CompanyConfi
 import { INITIAL_APP_DATA, DEFAULT_OFFICE_LOCATIONS, DEFAULT_PACKAGES, DEFAULT_CHANNEL_RATES, DEFAULT_TESTIMONIALS } from '../data/defaultData';
 
 export const PERMANENT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyJoS1CMQfAUGPNRec6bkgZthkhFY94Z5bIL6uLai5tMMb4OICx0RwLXlr_hCt4u4Cz/exec';
-export const APP_DATA_VERSION = '2026.09.12-v3';
+export const APP_DATA_VERSION = '2026.09.15-v2';
 
 export const safeNormalizeData = (incoming: any): AppData => {
   if (!incoming || typeof incoming !== 'object') {

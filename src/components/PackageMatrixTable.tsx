@@ -590,62 +590,62 @@ export const PackageMatrixTable: React.FC = () => {
         </div>
 
         {/* Matrix Table Container - Always visible on desktop, toggleable on mobile */}
-        <div className={`relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 shadow-md overflow-hidden ${mobileMode === 'table' ? 'block' : 'hidden lg:block'}`}>
+        <div className={`relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-md overflow-hidden ${mobileMode === 'table' ? 'block' : 'hidden lg:block'}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[950px]">
               <thead>
                 {/* Level 1 Header: Main Categories */}
-                <tr className="bg-amber-300 dark:bg-amber-400 text-slate-900 font-extrabold text-[11px] uppercase tracking-wider border-b border-amber-400 dark:border-amber-500">
-                  <th className="p-3 sticky left-0 z-20 bg-amber-300 dark:bg-amber-400 min-w-[140px]">
+                <tr className="bg-amber-400 dark:bg-amber-500 text-slate-950 font-black text-[11px] uppercase tracking-wider border-b border-amber-500 dark:border-amber-600">
+                  <th className="p-3 sticky left-0 z-20 bg-amber-400 dark:bg-amber-500 text-slate-950 min-w-[140px]">
                     FASILITAS
                   </th>
-                  <th className="p-3 min-w-[180px]">FITUR / TARIF</th>
-                  <th colSpan={3} className="p-3 text-center border-l border-amber-400/60 bg-amber-400/50">
+                  <th className="p-3 min-w-[180px] text-slate-950">FITUR / TARIF</th>
+                  <th colSpan={3} className="p-3 text-center border-l border-amber-500/60 bg-amber-400 dark:bg-amber-500 text-slate-950">
                     PAKET ONE KLIK TERIMA JADI
                   </th>
-                  <th colSpan={3} className="p-3 text-center border-l border-amber-400/60 bg-amber-300">
+                  <th colSpan={3} className="p-3 text-center border-l border-amber-500/60 bg-amber-350 dark:bg-amber-450 text-slate-950">
                     PAKET MANDIRI
                   </th>
-                  <th className="p-3 text-center border-l border-amber-400/60 bg-amber-400/60">
+                  <th className="p-3 text-center border-l border-amber-500/60 bg-amber-400 dark:bg-amber-500 text-slate-950">
                     PAKET UMKM
                   </th>
-                  <th className="p-3 text-center border-l border-amber-400/60 bg-amber-400/80">
+                  <th className="p-3 text-center border-l border-amber-500/60 bg-amber-400 dark:bg-amber-500 text-slate-950">
                     PAKET CORPORATE
                   </th>
-                  <th className="p-3 text-center border-l border-amber-400/60 bg-amber-300 min-w-[160px]">
+                  <th className="p-3 text-center border-l border-amber-500/60 bg-amber-350 dark:bg-amber-450 text-slate-950 min-w-[160px]">
                     PAKET DISKON ISI ULANG
                   </th>
                 </tr>
 
                 {/* Level 2 Header: Budget Tiers */}
-                <tr className="bg-amber-200/90 dark:bg-amber-500/30 text-slate-800 dark:text-amber-100 font-bold text-[10px] border-b border-slate-200 dark:border-slate-700">
-                  <th className="p-2.5 sticky left-0 z-20 bg-amber-200 dark:bg-amber-900/60 text-slate-900 dark:text-white">
+                <tr className="bg-amber-200 dark:bg-amber-600 text-slate-950 font-black text-[10px] border-b border-amber-300 dark:border-amber-700">
+                  <th className="p-2.5 sticky left-0 z-20 bg-amber-200 dark:bg-amber-600 text-slate-950">
                     Kategori Saluran
                   </th>
-                  <th className="p-2.5">Rate Satuan</th>
+                  <th className="p-2.5 text-slate-950">Rate Satuan</th>
                   
                   {/* One Klik Tiers */}
-                  <th className="p-2 text-center border-l border-amber-300/40">&lt;200.000</th>
-                  <th className="p-2 text-center">200.000 - 499.999</th>
-                  <th className="p-2 text-center">≥ 500.000</th>
+                  <th className="p-2 text-center text-slate-950 border-l border-amber-300 dark:border-amber-700">&lt;200.000</th>
+                  <th className="p-2 text-center text-slate-950">200.000 - 499.999</th>
+                  <th className="p-2 text-center text-slate-950">≥ 500.000</th>
 
                   {/* Mandiri Tiers */}
-                  <th className="p-2 text-center border-l border-amber-300/40">&lt;200.000</th>
-                  <th className="p-2 text-center">200.000 - 499.999</th>
-                  <th className="p-2 text-center">≥ 500.000</th>
+                  <th className="p-2 text-center text-slate-950 border-l border-amber-300 dark:border-amber-700">&lt;200.000</th>
+                  <th className="p-2 text-center text-slate-950">200.000 - 499.999</th>
+                  <th className="p-2 text-center text-slate-950">≥ 500.000</th>
 
                   {/* UMKM & Corporate */}
-                  <th className="p-2 text-center border-l border-amber-300/40">≥ 500.000</th>
-                  <th className="p-2 text-center border-l border-amber-300/40">≥ 1.000.000</th>
+                  <th className="p-2 text-center text-slate-950 border-l border-amber-300 dark:border-amber-700">≥ 500.000</th>
+                  <th className="p-2 text-center text-slate-950 border-l border-amber-300 dark:border-amber-700">≥ 1.000.000</th>
 
                   {/* Bonus Saldo Isi Ulang Column */}
-                  <th className="p-2 text-center border-l border-amber-300/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-extrabold">
+                  <th className="p-2 text-center border-l border-amber-300 dark:border-amber-700 bg-emerald-200 dark:bg-emerald-600 text-slate-950 font-black">
                     Bonus Saldo ({discountConfig.reloadDiscountPercent}%)
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900">
                 {filteredRows.map((row, idx) => {
                   const isSpecialRow =
                     row.facility.includes('GRATIS KONTEN') ||
@@ -657,19 +657,23 @@ export const PackageMatrixTable: React.FC = () => {
                   return (
                     <tr
                       key={idx}
-                      className={`hover:bg-blue-50/40 dark:hover:bg-slate-800/60 transition-colors ${
+                      className={`hover:bg-blue-50/60 dark:hover:bg-slate-800/80 transition-colors ${
                         isSpecialRow
-                          ? 'bg-slate-50/80 dark:bg-slate-800/40 font-semibold text-slate-900 dark:text-white'
-                          : ''
+                          ? 'bg-slate-100/90 dark:bg-slate-800/70 font-bold text-slate-950 dark:text-white'
+                          : 'bg-white dark:bg-slate-900'
                       }`}
                     >
                       {/* Facility */}
-                      <td className="p-2.5 font-bold sticky left-0 z-10 bg-white dark:bg-slate-850 border-r border-slate-100 dark:border-slate-800">
+                      <td className={`p-2.5 font-bold sticky left-0 z-10 border-r border-slate-200 dark:border-slate-800 ${
+                        isSpecialRow
+                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-950 dark:text-white'
+                          : 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white'
+                      }`}>
                         {row.facility}
                       </td>
 
                       {/* Feature Name & Rate */}
-                      <td className="p-2.5 font-medium text-slate-600 dark:text-slate-300">
+                      <td className="p-2.5 font-semibold text-slate-900 dark:text-slate-200">
                         {row.feature}
                       </td>
 
@@ -678,7 +682,7 @@ export const PackageMatrixTable: React.FC = () => {
                         (colKey, colIdx) => {
                           const borderLeft =
                             colIdx === 0 || colIdx === 3 || colIdx === 6 || colIdx === 7
-                              ? 'border-l border-slate-100 dark:border-slate-800'
+                              ? 'border-l border-slate-200 dark:border-slate-800'
                               : '';
 
                           if (row.customText) {
@@ -690,16 +694,16 @@ export const PackageMatrixTable: React.FC = () => {
                                 key={colKey}
                                 className={`p-2 text-center font-bold text-[11px] ${borderLeft} ${
                                   val && val.includes('4X') || isBonus
-                                    ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
+                                    ? 'text-emerald-700 dark:text-emerald-400 font-black'
                                     : isNoBonus
                                     ? 'text-slate-400 dark:text-slate-500 font-medium'
-                                    : 'text-slate-800 dark:text-slate-200'
+                                    : 'text-slate-950 dark:text-slate-100 font-bold'
                                 }`}
                               >
                                 <span className="inline-flex items-center justify-center gap-1">
                                   {val}
                                   {row.facility.includes('GRATIS KONTEN') && (
-                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
                                   )}
                                 </span>
                               </td>
@@ -710,11 +714,11 @@ export const PackageMatrixTable: React.FC = () => {
                           return (
                             <td key={colKey} className={`p-2 text-center ${borderLeft}`}>
                               {isChecked ? (
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60">
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
                                 </span>
                               ) : (
-                                <span className="text-slate-300 dark:text-slate-600 font-bold">—</span>
+                                <span className="text-slate-400 dark:text-slate-600 font-bold">—</span>
                               )}
                             </td>
                           );
@@ -725,24 +729,24 @@ export const PackageMatrixTable: React.FC = () => {
                       {idx === 0 ? (
                         <td
                           rowSpan={rows.length}
-                          className="p-4 text-center border-l border-slate-200 dark:border-slate-800 bg-emerald-50/40 dark:bg-emerald-950/20 align-middle"
+                          className="p-4 text-center border-l border-slate-200 dark:border-slate-800 bg-emerald-50/60 dark:bg-emerald-950/30 align-middle"
                         >
                           <div className="space-y-3 max-w-[140px] mx-auto">
                             <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-600 text-white font-black text-sm shadow-md">
                               {discountConfig.reloadDiscountPercent}%
                             </span>
                             <div>
-                              <p className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
+                              <p className="font-extrabold text-xs text-emerald-950 dark:text-emerald-200">
                                 Bonus Saldo
                               </p>
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                              <p className="text-[10px] text-slate-700 dark:text-slate-300 mt-0.5 font-medium">
                                 Bonus monetary s/d 50% atau sesuai setting di Dashboard Admin.
                               </p>
                             </div>
                             <button
                               id="btn-matrix-order-discount"
                               onClick={() => openOrderModalForPackage(null)}
-                              className="w-full py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-xs flex items-center justify-center gap-1"
+                              className="w-full py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-xs flex items-center justify-center gap-1 active:scale-95"
                             >
                               <Send className="w-3 h-3" />
                               <span>Pesan Sekarang</span>

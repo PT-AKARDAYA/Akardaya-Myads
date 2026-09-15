@@ -386,12 +386,12 @@ export const PackageCards: React.FC = () => {
                           {(pkg.accountType || pkg.saldoInfo) && (
                             <div className={`grid ${pkg.accountType ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 pt-0.5 text-[11px]`}>
                               {pkg.accountType && (
-                                <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 truncate">
+                                <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold truncate">
                                   <UserCheck className="w-3 h-3 text-indigo-500 shrink-0" />
                                   <span className="truncate">{pkg.accountType}</span>
                                 </div>
                               )}
-                              <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 truncate">
+                              <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold truncate">
                                 <Coins className="w-3 h-3 text-amber-500 shrink-0" />
                                 <span className="truncate">Saldo 100% Utuh</span>
                               </div>
@@ -563,14 +563,14 @@ export const PackageCards: React.FC = () => {
                     {(pkg.accountType || pkg.saldoInfo) && (
                       <div className={`grid ${pkg.accountType ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1 text-[11px]`}>
                         {pkg.accountType && (
-                          <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                          <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold">
                             <UserCheck className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                             <span className="truncate" title={`Pembuatan: ${pkg.accountType}`}>
                               {pkg.accountType}
                             </span>
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                        <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold">
                           <Coins className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                           <span className="truncate" title="Saldo My Ads Penuh">
                             Saldo 100%
